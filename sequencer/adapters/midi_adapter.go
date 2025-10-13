@@ -76,22 +76,27 @@ func (m *MIDIAdapter) GetChannelMapping(eventName string) uint8 {
 }
 
 // Send implements EventAdapter.Send
-func (m *MIDIAdapter) Send(event sequencer.Event) error {
-	switch event.Type {
-	case sequencer.EventTypeNote:
-		return m.sendNote(event)
-	case sequencer.EventTypeModulation:
-		return m.sendCC(event)
-	case sequencer.EventTypeRest:
-		// Rest is a no-op
-		return nil
-	default:
-		return fmt.Errorf("unsupported event type: %s", event.Type)
-	}
+func (m *MIDIAdapter) Send(scheduled sequencer.ScheduledEvent) error {
+	go func() {
+		// Wait before triggering
+		time.Sleep(scheduled.Timing.Wait)
+
+		switch scheduled.Event.Type {
+		case sequencer.EventTypeNote:
+			m.sendNote(scheduled)
+		case sequencer.EventTypeModulation:
+			m.sendCC(scheduled)
+		case sequencer.EventTypeRest:
+			// Rest is a no-op
+		}
+	}()
+	return nil
 }
 
 // sendNote converts frequency to MIDI note and sends note on/off
-func (m *MIDIAdapter) sendNote(event sequencer.Event) error {
+func (m *MIDIAdapter) sendNote(scheduled sequencer.ScheduledEvent) error {
+	event := scheduled.Event
+	timing := scheduled.Timing
 	// Convert frequency to MIDI note number
 	midiNote := frequencyToMIDI(event.A)
 
@@ -110,9 +115,9 @@ func (m *MIDIAdapter) sendNote(event sequencer.Event) error {
 	m.active[event.Name] = noteState{midiNote: midiNote, channel: channel}
 
 	// Schedule note off after duration
-	if event.Duration > 0 {
+	if timing.Duration > 0 {
 		go func() {
-			time.Sleep(event.Duration)
+			time.Sleep(timing.Duration)
 			m.send(midi.NoteOff(channel, midiNote))
 			delete(m.active, event.Name)
 		}()
@@ -122,7 +127,8 @@ func (m *MIDIAdapter) sendNote(event sequencer.Event) error {
 }
 
 // sendCC sends MIDI CC message
-func (m *MIDIAdapter) sendCC(event sequencer.Event) error {
+func (m *MIDIAdapter) sendCC(scheduled sequencer.ScheduledEvent) error {
+	event := scheduled.Event
 	// a = CC number, b = value (0.0-1.0)
 	ccNum := uint8(event.A)
 	ccValue := uint8(event.B * 127.0)

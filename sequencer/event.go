@@ -30,12 +30,22 @@ const (
 // For EventTypeRest:
 //   - No parameters used (rest is a no-op)
 type Event struct {
-	Name      string        // Event identifier/name
-	Type      EventType     // Type of event
-	A         float32       // First parameter (meaning depends on type)
-	B         float32       // Second parameter (meaning depends on type)
-	C         float32       // Third parameter (reserved for future use)
-	D         float32       // Fourth parameter (reserved for future use)
-	Duration  time.Duration // Event duration (mainly for notes)
-	Timestamp time.Time     // When the event should occur
+	Name string    // Event identifier/name
+	Type EventType // Type of event
+	A    float32   // First parameter (meaning depends on type)
+	B    float32   // Second parameter (meaning depends on type)
+	C    float32   // Third parameter (reserved for future use)
+	D    float32   // Fourth parameter (reserved for future use)
+}
+
+// Timing represents when and how long an event should play
+type Timing struct {
+	Wait     time.Duration // Wait before triggering
+	Duration time.Duration // How long event lasts
+}
+
+// ScheduledEvent pairs an Event with Timing information
+type ScheduledEvent struct {
+	Event  Event
+	Timing Timing
 }
