@@ -22,6 +22,7 @@ type Sequencer struct {
 	conductor conductors.Conductor
 	debug     bool
 	running   bool
+	paused    bool
 	stopCh    chan struct{}
 }
 
@@ -55,13 +56,15 @@ func (s *Sequencer) Start() {
 	}
 }
 
-// Pause pauses playback
+// Pause pauses playback (conductor stops ticking, patterns stop generating events)
 func (s *Sequencer) Pause() {
+	s.paused = true
 	s.conductor.Pause()
 }
 
-// Resume resumes playback
+// Resume resumes playback (conductor resumes ticking, patterns resume generating events)
 func (s *Sequencer) Resume() {
+	s.paused = false
 	s.conductor.Resume()
 }
 
@@ -74,6 +77,12 @@ func (s *Sequencer) runPattern(index int) {
 		case <-s.stopCh:
 			return
 		default:
+			// Check if paused - if so, sleep briefly and continue
+			if s.paused {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+
 			// Get next scheduled event from pattern
 			scheduled, err := pattern.GetNextScheduledEvent()
 			if err != nil {
@@ -81,16 +90,16 @@ func (s *Sequencer) runPattern(index int) {
 				continue
 			}
 
-			// Send to adapter
+			// Wait until it's time to fire the event
+			time.Sleep(scheduled.Timing.Delta)
+
+			// Send to adapter (fires immediately)
 			if s.adapter != nil {
 				if err := s.adapter.Send(scheduled); err != nil {
 					s.handleError(fmt.Sprintf("pattern %d adapter error: %v", index, err))
 					continue
 				}
 			}
-
-			// Wait before generating next event
-			time.Sleep(scheduled.Timing.Delta)
 		}
 	}
 }

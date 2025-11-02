@@ -87,20 +87,17 @@ func (m *MIDIAdapter) GetChannelMapping(eventName string) uint8 {
 }
 
 // Send implements EventAdapter.Send
+// Note: Fires immediately - caller is responsible for timing (Delta)
 func (m *MIDIAdapter) Send(scheduled events.ScheduledEvent) error {
-	go func() {
-		// Sleep for delta time since previous event
-		time.Sleep(scheduled.Timing.Delta)
-
-		switch scheduled.Event.Type {
-		case events.EventTypeNote:
-			m.sendNote(scheduled)
-		case events.EventTypeModulation:
-			m.sendCC(scheduled)
-		case events.EventTypeRest:
-			// Rest is a no-op
-		}
-	}()
+	switch scheduled.Event.Type {
+	case events.EventTypeNote:
+		return m.sendNote(scheduled)
+	case events.EventTypeModulation:
+		return m.sendCC(scheduled)
+	case events.EventTypeRest:
+		// Rest is a no-op
+		return nil
+	}
 	return nil
 }
 
