@@ -17,7 +17,7 @@ type KickPattern struct {
 func NewKickPattern(c *conductors.CommonTimeConductor) *KickPattern {
 	return &KickPattern{
 		conductor:    c,
-		lastFireTick: -1, // Start at -1 so first beat (0) fires
+		lastFireTick: int64(-c.GetTicksPerBeat()), // Start negative so first fire is at tick 0
 	}
 }
 

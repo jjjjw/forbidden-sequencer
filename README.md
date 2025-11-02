@@ -115,19 +115,37 @@ Dev server: http://localhost:34115
 
 Build production package: `wails build`
 
+### Testing
+
+Run all tests:
+```bash
+go test ./...
+```
+
+Run tests with verbose output:
+```bash
+go test ./... -v
+```
+
+Run tests for a specific package:
+```bash
+go test ./sequencer/conductors -v
+go test ./sequencer/patterns/techno -v
+```
+
 ## Project Structure
 
 ```
-patterns/
-└── techno/
-    ├── kick_pattern.go       # Kick on every beat
-    └── hihat_pattern.go      # Hihat on off-beats
 sequencer/
 ├── events/
 │   └── event.go              # Event, Timing, ScheduledEvent types
 ├── conductors/
 │   ├── conductor.go          # Conductor interface (minimal tick-based clock)
 │   └── common_time_conductor.go # Beat-aware implementation
+├── patterns/
+│   └── techno/
+│       ├── kick_pattern.go   # Kick on every beat
+│       └── hihat_pattern.go  # Hihat on off-beats
 ├── sequencers/
 │   ├── sequencer.go          # Pattern interface + orchestration
 │   └── techno.go             # Techno sequencer factory

@@ -1,9 +1,9 @@
 package sequencers
 
 import (
-	"forbidden_sequencer/patterns/techno"
 	"forbidden_sequencer/sequencer/adapters"
 	"forbidden_sequencer/sequencer/conductors"
+	"forbidden_sequencer/sequencer/patterns/techno"
 )
 
 // NewTechnoSequencer creates a techno sequencer with kick and hihat patterns
