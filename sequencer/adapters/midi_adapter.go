@@ -5,11 +5,11 @@ import (
 	"math"
 	"time"
 
-	"forbidden_sequencer/sequencer"
+	"forbidden_sequencer/sequencer/events"
 
 	"gitlab.com/gomidi/midi/v2"
 	"gitlab.com/gomidi/midi/v2/drivers"
-	"gitlab.com/gomidi/midi/v2/drivers/portmididrv"
+	"gitlab.com/gomidi/midi/v2/drivers/rtmididrv"
 )
 
 // MIDIAdapter implements EventAdapter for MIDI output
@@ -26,26 +26,37 @@ type noteState struct {
 }
 
 // NewMIDIAdapter creates a new MIDI adapter
-// portIndex: -1 for default port, or specific port index
+// portIndex: -1 for default port (0), or specific port index
 func NewMIDIAdapter(portIndex int) (*MIDIAdapter, error) {
-	drv, err := portmididrv.New()
+	drv, err := rtmididrv.New()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize portmidi driver: %w", err)
+		return nil, fmt.Errorf("failed to initialize rtmidi driver: %w", err)
 	}
 
-	var out drivers.Out
+	// Use port 0 if -1 specified
+	port := portIndex
 	if portIndex < 0 {
-		// Use default output
-		out, err = midi.OutPort(drv, 0)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open default MIDI port: %w", err)
-		}
-	} else {
-		// Use specific port
-		out, err = midi.OutPort(drv, portIndex)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open MIDI port %d: %w", portIndex, err)
-		}
+		port = 0
+	}
+
+	// Get list of output ports
+	outs, err := drv.Outs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MIDI outputs: %w", err)
+	}
+
+	if len(outs) == 0 {
+		return nil, fmt.Errorf("no MIDI output ports available")
+	}
+
+	if port >= len(outs) {
+		return nil, fmt.Errorf("MIDI port %d not found (only %d ports available)", port, len(outs))
+	}
+
+	out := outs[port]
+	err = out.Open()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open MIDI port %d: %w", port, err)
 	}
 
 	send, err := midi.SendTo(out)
@@ -76,17 +87,17 @@ func (m *MIDIAdapter) GetChannelMapping(eventName string) uint8 {
 }
 
 // Send implements EventAdapter.Send
-func (m *MIDIAdapter) Send(scheduled sequencer.ScheduledEvent) error {
+func (m *MIDIAdapter) Send(scheduled events.ScheduledEvent) error {
 	go func() {
-		// Wait before triggering
-		time.Sleep(scheduled.Timing.Wait)
+		// Sleep for delta time since previous event
+		time.Sleep(scheduled.Timing.Delta)
 
 		switch scheduled.Event.Type {
-		case sequencer.EventTypeNote:
+		case events.EventTypeNote:
 			m.sendNote(scheduled)
-		case sequencer.EventTypeModulation:
+		case events.EventTypeModulation:
 			m.sendCC(scheduled)
-		case sequencer.EventTypeRest:
+		case events.EventTypeRest:
 			// Rest is a no-op
 		}
 	}()
@@ -94,7 +105,7 @@ func (m *MIDIAdapter) Send(scheduled sequencer.ScheduledEvent) error {
 }
 
 // sendNote converts frequency to MIDI note and sends note on/off
-func (m *MIDIAdapter) sendNote(scheduled sequencer.ScheduledEvent) error {
+func (m *MIDIAdapter) sendNote(scheduled events.ScheduledEvent) error {
 	event := scheduled.Event
 	timing := scheduled.Timing
 	// Convert frequency to MIDI note number
@@ -127,7 +138,7 @@ func (m *MIDIAdapter) sendNote(scheduled sequencer.ScheduledEvent) error {
 }
 
 // sendCC sends MIDI CC message
-func (m *MIDIAdapter) sendCC(scheduled sequencer.ScheduledEvent) error {
+func (m *MIDIAdapter) sendCC(scheduled events.ScheduledEvent) error {
 	event := scheduled.Event
 	// a = CC number, b = value (0.0-1.0)
 	ccNum := uint8(event.A)

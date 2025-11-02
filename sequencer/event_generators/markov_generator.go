@@ -1,6 +1,9 @@
 package event_generators
 
-import "forbidden_sequencer/sequencer"
+import (
+	"forbidden_sequencer/sequencer/events"
+	"forbidden_sequencer/sequencer/lib"
+)
 
 const markovSeed = 42
 
@@ -9,18 +12,18 @@ type MarkovGenerator struct {
 	// Name of the generator
 	Name string
 	// Markov chain for event generation
-	Chain *sequencer.MarkovChain
+	Chain *lib.MarkovChain
 }
 
 // NewMarkovGenerator creates a new Markov generator
 func NewMarkovGenerator(name string) *MarkovGenerator {
 	return &MarkovGenerator{
 		Name:  name,
-		Chain: sequencer.NewMarkovChain(markovSeed),
+		Chain: lib.NewMarkovChain(markovSeed),
 	}
 }
 
 // GetNextEvent implements EventGenerator.GetNextEvent
-func (g *MarkovGenerator) GetNextEvent() (sequencer.Event, error) {
+func (g *MarkovGenerator) GetNextEvent() (events.Event, error) {
 	return g.Chain.Generate()
 }

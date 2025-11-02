@@ -15,7 +15,7 @@
     </button>
   </div>
 
-  <!-- TODO: Add lanes and pattern selection -->
+  <!-- TODO: Add pattern selection -->
 </main>
 
 <style>
