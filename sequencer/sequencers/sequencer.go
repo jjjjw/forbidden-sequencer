@@ -59,7 +59,7 @@ func (s *Sequencer) Start() {
 	}
 }
 
-// Stop stops playback (patterns reset, conductor stops)
+// Stop stops playback (patterns silence, conductor stops)
 func (s *Sequencer) Stop() {
 	s.paused = true
 
