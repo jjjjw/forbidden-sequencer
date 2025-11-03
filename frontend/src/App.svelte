@@ -1,44 +1,46 @@
 <script lang="ts">
+  import Settings from './components/Settings.svelte';
+
+  enum View {
+    Main = 'main',
+    Settings = 'settings'
+  }
+
   let paused = true;
+  let currentView: View = View.Main;
 
   function togglePause() {
     paused = !paused;
     // TODO: Call Go backend to pause/resume sequencer
   }
+
+  function showSettings() {
+    currentView = View.Settings;
+  }
+
+  function showMain() {
+    currentView = View.Main;
+  }
 </script>
 
-<main>
-  <div class="header">
-    <h1>Forbidden Sequencer</h1>
-    <button on:click={togglePause}>
-      {paused ? 'Resume' : 'Pause'}
-    </button>
+<main class="p-8 max-w-7xl mx-auto">
+  <div class="flex justify-between items-center mb-8">
+    <h1 class="text-3xl font-bold m-0">Forbidden Sequencer</h1>
+    <div class="flex gap-2">
+      {#if currentView === View.Main}
+        <button class="px-8 py-2 text-lg cursor-pointer" on:click={togglePause}>
+          {paused ? 'Resume' : 'Pause'}
+        </button>
+        <button class="px-8 py-2 text-lg cursor-pointer" on:click={showSettings}>Settings</button>
+      {:else}
+        <button class="px-8 py-2 text-lg cursor-pointer" on:click={showMain}>Back</button>
+      {/if}
+    </div>
   </div>
 
-  <!-- TODO: Add pattern selection -->
+  {#if currentView === View.Settings}
+    <Settings />
+  {:else}
+    <!-- TODO: Add pattern selection -->
+  {/if}
 </main>
-
-<style>
-  main {
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-  }
-
-  .header h1 {
-    margin: 0;
-  }
-
-  .header button {
-    padding: 0.5rem 2rem;
-    font-size: 1.1rem;
-    cursor: pointer;
-  }
-</style>

@@ -3,6 +3,7 @@ module forbidden_sequencer
 go 1.24.2
 
 require (
+	github.com/adrg/xdg v0.5.3
 	github.com/wailsapp/wails/v2 v2.10.2
 	gitlab.com/gomidi/midi/v2 v2.3.16
 )

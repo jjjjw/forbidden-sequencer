@@ -18,6 +18,14 @@ type MIDIAdapter struct {
 	send           func(msg midi.Message) error
 	active         map[string]noteState // track active notes for note-off
 	channelMapping map[string]uint8     // maps event names to MIDI channels
+	driver         *rtmididrv.Driver
+	currentPort    int
+}
+
+// MIDIPortInfo represents information about a MIDI output port
+type MIDIPortInfo struct {
+	Index int
+	Name  string
 }
 
 type noteState struct {
@@ -69,6 +77,8 @@ func NewMIDIAdapter(portIndex int) (*MIDIAdapter, error) {
 		send:           send,
 		active:         make(map[string]noteState),
 		channelMapping: make(map[string]uint8),
+		driver:         drv,
+		currentPort:    port,
 	}, nil
 }
 
@@ -84,6 +94,86 @@ func (m *MIDIAdapter) GetChannelMapping(eventName string) uint8 {
 		return channel
 	}
 	return 0 // default to channel 0
+}
+
+// GetAllChannelMappings returns all channel mappings
+func (m *MIDIAdapter) GetAllChannelMappings() map[string]uint8 {
+	result := make(map[string]uint8)
+	for k, v := range m.channelMapping {
+		result[k] = v
+	}
+	return result
+}
+
+// GetCurrentPort returns the index of the currently selected MIDI port
+func (m *MIDIAdapter) GetCurrentPort() int {
+	return m.currentPort
+}
+
+// ListAvailablePorts returns a list of all available MIDI output ports
+func (m *MIDIAdapter) ListAvailablePorts() ([]MIDIPortInfo, error) {
+	if m.driver == nil {
+		return nil, fmt.Errorf("MIDI driver not initialized")
+	}
+
+	outs, err := m.driver.Outs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MIDI outputs: %w", err)
+	}
+
+	ports := make([]MIDIPortInfo, len(outs))
+	for i, out := range outs {
+		ports[i] = MIDIPortInfo{
+			Index: i,
+			Name:  out.String(),
+		}
+	}
+
+	return ports, nil
+}
+
+// SetPort changes the MIDI output port
+func (m *MIDIAdapter) SetPort(portIndex int) error {
+	// Stop all active notes
+	for name, state := range m.active {
+		m.send(midi.NoteOff(state.channel, state.midiNote))
+		delete(m.active, name)
+	}
+
+	// Close current port
+	if m.out != nil {
+		m.out.Close()
+	}
+
+	// Get list of output ports
+	outs, err := m.driver.Outs()
+	if err != nil {
+		return fmt.Errorf("failed to get MIDI outputs: %w", err)
+	}
+
+	if portIndex < 0 || portIndex >= len(outs) {
+		return fmt.Errorf("MIDI port %d not found (only %d ports available)", portIndex, len(outs))
+	}
+
+	// Open new port
+	out := outs[portIndex]
+	err = out.Open()
+	if err != nil {
+		return fmt.Errorf("failed to open MIDI port %d: %w", portIndex, err)
+	}
+
+	// Create new sender
+	send, err := midi.SendTo(out)
+	if err != nil {
+		out.Close()
+		return fmt.Errorf("failed to create MIDI sender: %w", err)
+	}
+
+	m.out = out
+	m.send = send
+	m.currentPort = portIndex
+
+	return nil
 }
 
 // Send implements EventAdapter.Send
