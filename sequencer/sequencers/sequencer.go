@@ -13,6 +13,7 @@ import (
 // Pattern generates scheduled events
 type Pattern interface {
 	GetNextScheduledEvent() (events.ScheduledEvent, error)
+	Reset()
 }
 
 // Sequencer manages multiple patterns and outputs events through an adapter
@@ -34,6 +35,7 @@ func NewSequencer(patterns []Pattern, conductor conductors.Conductor, adapter ad
 		adapter:   adapter,
 		debug:     debug,
 		running:   false,
+		paused:    true,
 	}
 }
 
@@ -42,6 +44,7 @@ func (s *Sequencer) Start() {
 	// Stop any existing run
 	if s.running {
 		close(s.stopCh)
+		s.conductor.Stop()
 	}
 
 	s.running = true
@@ -56,16 +59,28 @@ func (s *Sequencer) Start() {
 	}
 }
 
-// Pause pauses playback (conductor stops ticking, patterns stop generating events)
-func (s *Sequencer) Pause() {
+// Stop stops playback (patterns reset, conductor stops)
+func (s *Sequencer) Stop() {
 	s.paused = true
-	s.conductor.Pause()
+
+	// Stop conductor
+	s.conductor.Stop()
 }
 
-// Resume resumes playback (conductor resumes ticking, patterns resume generating events)
-func (s *Sequencer) Resume() {
+// Play starts playback (patterns start generating events from tick 0)
+func (s *Sequencer) Play() {
+	// Reset conductor to tick 0 with new start time
+	s.conductor.Reset()
+
+	// Reset all patterns so they re-sync on play
+	for _, pattern := range s.patterns {
+		pattern.Reset()
+	}
+
+	// Start conductor again
+	s.conductor.Start()
+
 	s.paused = false
-	s.conductor.Resume()
 }
 
 // runPattern runs a single pattern's event loop

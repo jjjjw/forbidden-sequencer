@@ -122,11 +122,10 @@ func TestCommonTimeConductor_Reset(t *testing.T) {
 	}
 }
 
-func TestCommonTimeConductor_StartAndPause(t *testing.T) {
+func TestCommonTimeConductor_Start(t *testing.T) {
 	c := NewCommonTimeConductor(4, 120)
 
 	c.Start()
-	defer c.Pause() // Stop the goroutine after test
 
 	// Wait a bit for ticks to advance
 	time.Sleep(300 * time.Millisecond) // Should advance ~2 ticks at 125ms/tick
@@ -136,21 +135,11 @@ func TestCommonTimeConductor_StartAndPause(t *testing.T) {
 		t.Error("Expected conductor to advance ticks while running")
 	}
 
-	// Pause
-	c.Pause()
-	time.Sleep(200 * time.Millisecond)
-
-	tick2 := c.GetCurrentTick()
-	if tick2 != tick1 {
-		t.Error("Expected ticks to stop advancing while paused")
-	}
-
-	// Resume
-	c.Resume()
+	// Wait more and verify ticks continue to advance
 	time.Sleep(300 * time.Millisecond)
 
-	tick3 := c.GetCurrentTick()
-	if tick3 <= tick2 {
-		t.Error("Expected ticks to resume advancing after resume")
+	tick2 := c.GetCurrentTick()
+	if tick2 <= tick1 {
+		t.Error("Expected ticks to continue advancing")
 	}
 }

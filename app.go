@@ -66,32 +66,22 @@ func (a *App) StartTechno() string {
 	return "Techno sequencer started!"
 }
 
-// Stop stops the sequencer
+// Stop stops the sequencer (resets patterns)
 func (a *App) Stop() string {
 	if a.sequencer == nil {
 		return "Sequencer not initialized"
 	}
-	// Sequencer doesn't have a Stop method yet, but we can pause
-	a.sequencer.Pause()
+	a.sequencer.Stop()
 	return "Sequencer stopped"
 }
 
-// Pause pauses the sequencer
-func (a *App) Pause() string {
+// Play starts/resumes the sequencer
+func (a *App) Play() string {
 	if a.sequencer == nil {
 		return "Sequencer not initialized"
 	}
-	a.sequencer.Pause()
-	return "Sequencer paused"
-}
-
-// Resume resumes the sequencer
-func (a *App) Resume() string {
-	if a.sequencer == nil {
-		return "Sequencer not initialized"
-	}
-	a.sequencer.Resume()
-	return "Sequencer resumed"
+	a.sequencer.Play()
+	return "Sequencer playing"
 }
 
 // GetMIDIPorts returns a list of available MIDI output ports

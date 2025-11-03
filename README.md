@@ -20,13 +20,15 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 - Maintains internal state (conductor, lastFireTick, etc.)
 
 **Conductor** - Tick-based master clock
-- Minimal interface: `GetCurrentTick()`, `GetTickDuration()`, `Start()`, `Pause()`, `Resume()`
-- Runs in its own goroutine, advancing ticks at precise intervals
+- Minimal interface: `GetCurrentTick()`, `GetTickDuration()`, `Start()`, `Reset()`
+- Runs in its own goroutine, advancing ticks at precise intervals based on absolute wall-clock time
 - Single source of truth for timing (prevents drift)
+- `Reset()` returns to tick 0 and captures new start time reference
 - `CommonTimeConductor` implementation adds:
   - Beat-awareness (ticksPerBeat, BPM)
   - Musical time helpers (IsBeatStart, GetTickInBeat, GetBeat)
   - Dynamic tempo changes via SetBPM()
+  - Absolute time tracking via `GetAbsoluteTimeForTick()` for drift-free scheduling
 - Patterns query conductor but cannot mutate it (read-only interface)
 
 **Sequencer** - Pattern orchestration
@@ -34,7 +36,10 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 - Starts conductor in its own goroutine
 - Launches each pattern in its own goroutine
 - Each pattern independently queries conductor and sends events to adapter
-- Provides playback controls: Start(), Pause(), Resume()
+- Provides playback controls: Start(), Play(), Stop()
+- Stop() resets conductor (tick 0, new start time) and all patterns
+- Play() resumes pattern processing from current conductor state
+- TODO: Pause/Resume (pause conductor + patterns, resume without reset)
 
 **Controller** - Frontend ↔ Backend bridge
 - Receives control changes from frontend
@@ -93,6 +98,8 @@ sequencer.Start()
 - [x] Refactor Sequencer to use Pattern + Conductor
 - [x] Create basic patterns (Kick, Hihat)
 - [x] Create Techno sequencer factory
+- [x] Implement drift-free absolute time scheduling
+- [ ] Implement Pause/Resume (pause conductor ticking + pattern processing, resume without reset)
 - [ ] Add coordination primitives to Conductor (scratch space for pattern communication)
 - [ ] Example: Kick Mutes Bass pattern coordination
   - Kick pattern writes to Conductor scratch space when it fires

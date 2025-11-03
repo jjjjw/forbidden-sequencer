@@ -62,6 +62,12 @@ func (m *mockPattern) getEventCount() int {
 	return m.eventCount
 }
 
+func (m *mockPattern) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.eventCount = 0
+}
+
 // mockAdapter tracks events sent to it
 type mockAdapter struct {
 	events []events.ScheduledEvent
@@ -122,6 +128,7 @@ func TestSequencer_StartAndPatternExecution(t *testing.T) {
 
 	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
 	seq.Start()
+	seq.Play() // Start playback
 
 	// Wait for pattern to generate events
 	// At 120 BPM with 4 ticks/beat: tick duration = 125ms
@@ -151,39 +158,47 @@ func TestSequencer_StartAndPatternExecution(t *testing.T) {
 	}
 }
 
-func TestSequencer_PauseAndResume(t *testing.T) {
+func TestSequencer_StopAndPlay(t *testing.T) {
 	conductor := conductors.NewCommonTimeConductor(4, 120)
 	adapter := newMockAdapter()
 	pattern := newMockPattern(conductor, 100) // Lots of events
 
 	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
 	seq.Start()
+	seq.Play() // Start playing
 
-	// Let it run briefly (at least 2 tick durations = 250ms)
-	time.Sleep(300 * time.Millisecond)
+	// Let it run briefly
+	time.Sleep(100 * time.Millisecond)
 
-	// Get current tick
-	tick1 := conductor.GetCurrentTick()
-	if tick1 < 1 {
-		t.Errorf("Expected conductor to advance ticks while running, got tick %d", tick1)
+	adapterCount1 := adapter.getEventCount()
+	if adapterCount1 < 1 {
+		t.Error("Expected adapter to receive events while playing")
 	}
 
-	// Pause
-	seq.Pause()
-	time.Sleep(200 * time.Millisecond)
+	// Stop (patterns stop processing and reset)
+	seq.Stop()
 
-	tick2 := conductor.GetCurrentTick()
-	if tick2 != tick1 {
-		t.Error("Expected conductor to stop advancing ticks while paused")
+	// Small sleep to let any in-flight events complete
+	time.Sleep(20 * time.Millisecond)
+	adapterCount2 := adapter.getEventCount()
+
+	// Wait longer and verify no more events come through
+	time.Sleep(100 * time.Millisecond)
+	adapterCount3 := adapter.getEventCount()
+
+	// Adapter should not receive new events while stopped (allow for 1 in-flight event due to race)
+	if adapterCount3 > adapterCount2 {
+		t.Errorf("Expected no new events while stopped, got %d after waiting vs %d right after stop", adapterCount3, adapterCount2)
 	}
 
-	// Resume
-	seq.Resume()
-	time.Sleep(300 * time.Millisecond)
+	// Play again (resets conductor and patterns start fresh)
+	seq.Play()
+	time.Sleep(100 * time.Millisecond)
 
-	tick3 := conductor.GetCurrentTick()
-	if tick3 <= tick2 {
-		t.Error("Expected conductor to resume advancing ticks after resume")
+	adapterCount4 := adapter.getEventCount()
+	// Adapter should receive new events after play
+	if adapterCount4 <= adapterCount3 {
+		t.Error("Expected adapter to receive events after play")
 	}
 }
 
@@ -195,6 +210,7 @@ func TestSequencer_MultiplePatterns(t *testing.T) {
 
 	seq := NewSequencer([]Pattern{pattern1, pattern2}, conductor, adapter, false)
 	seq.Start()
+	seq.Play() // Start playback
 
 	// Wait for patterns to generate events
 	time.Sleep(100 * time.Millisecond)
@@ -227,6 +243,7 @@ func TestSequencer_ConductorIntegration(t *testing.T) {
 
 	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
 	seq.Start()
+	seq.Play()
 
 	// Wait for at least 2 tick durations (250ms)
 	time.Sleep(300 * time.Millisecond)
@@ -236,15 +253,69 @@ func TestSequencer_ConductorIntegration(t *testing.T) {
 		t.Errorf("Expected conductor to advance after sequencer start, got tick %d", conductor.GetCurrentTick())
 	}
 
-	// Pause sequencer
-	seq.Pause()
-	pausedTick := conductor.GetCurrentTick()
+	// Stop sequencer
+	seq.Stop()
 
-	// Wait
+	// Play again - should reset conductor to 0
+	seq.Play()
+
+	// Give it a moment to reset
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify conductor was reset and is advancing from 0
+	tick := conductor.GetCurrentTick()
+	if tick < 0 || tick > 10 {
+		t.Errorf("Expected conductor to be reset to near 0, got tick %d", tick)
+	}
+}
+
+func TestSequencer_PlayStopPlayCycle(t *testing.T) {
+	conductor := conductors.NewCommonTimeConductor(4, 120)
+	adapter := newMockAdapter()
+	pattern := newMockPattern(conductor, 100)
+
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
+	seq.Start()
+
+	// First play cycle
+	seq.Play()
 	time.Sleep(200 * time.Millisecond)
 
-	// Verify conductor stopped advancing
-	if conductor.GetCurrentTick() != pausedTick {
-		t.Error("Expected conductor to stop when sequencer paused")
+	count1 := adapter.getEventCount()
+	if count1 < 1 {
+		t.Error("Expected events during first play")
+	}
+
+	tick1 := conductor.GetCurrentTick()
+	if tick1 < 1 {
+		t.Errorf("Expected conductor to advance during first play, got tick %d", tick1)
+	}
+
+	// Stop
+	seq.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	// After stop, conductor is stopped but tick may not be at 0 yet
+	tickAfterStop := conductor.GetCurrentTick()
+	if tickAfterStop < tick1 {
+		t.Error("Expected conductor tick to not go backwards after stop")
+	}
+
+	// Second play cycle - this is the critical test
+	seq.Play()
+
+	// Verify conductor reset to 0 and restarted
+	time.Sleep(50 * time.Millisecond)
+	tick2 := conductor.GetCurrentTick()
+	if tick2 < 0 || tick2 > 10 {
+		t.Errorf("Expected conductor to start from 0 on second play, got tick %d", tick2)
+	}
+
+	// Let it run and verify events are generated
+	time.Sleep(100 * time.Millisecond)
+	count2 := adapter.getEventCount()
+
+	if count2 <= count1 {
+		t.Errorf("Expected new events after second play, got %d events (was %d after first play)", count2, count1)
 	}
 }

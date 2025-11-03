@@ -23,23 +23,27 @@ func NewHihatPattern(c *conductors.CommonTimeConductor) *HihatPattern {
 	}
 }
 
+// Reset resets the pattern state
+func (h *HihatPattern) Reset() {
+	h.initialized = false
+}
+
 // GetNextScheduledEvent implements the Pattern interface
 func (h *HihatPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
-	currentTick := h.conductor.GetCurrentTick()
 	ticksPerBeat := h.conductor.GetTicksPerBeat()
 
-	// Initialize lastFireTick to fire on first off-beat
+	// Initialize on first call, offset by half a beat to maintain off-beat rhythm
 	if !h.initialized {
-		h.lastFireTick = int64(ticksPerBeat/2) - int64(ticksPerBeat)
+		h.lastFireTick = h.conductor.GetCurrentTick() + int64(ticksPerBeat/2)
 		h.initialized = true
 	}
 
 	// Calculate next fire tick (next off-beat)
 	nextFireTick := h.lastFireTick + int64(ticksPerBeat)
 
-	// Convert tick delta to time delta
-	tickDelta := nextFireTick - currentTick
-	timeDelta := h.conductor.GetTickDuration() * time.Duration(tickDelta)
+	// Calculate absolute wall-clock time for this tick (drift-free)
+	nextFireTime := h.conductor.GetAbsoluteTimeForTick(nextFireTick)
+	timeDelta := time.Until(nextFireTime)
 
 	// Update last fire tick
 	h.lastFireTick = nextFireTick

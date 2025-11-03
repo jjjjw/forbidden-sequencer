@@ -7,14 +7,14 @@ import (
 
 // CommonTimeConductor implements a tick-based conductor with common time (beat-based) concepts
 type CommonTimeConductor struct {
-	currentTick  int64
+	currentTick  atomic.Int64
 	tickDuration time.Duration
 	ticksPerBeat int
 	bpm          float64
 	running      bool
-	paused       bool
 	stopCh       chan struct{}
 	updateCh     chan struct{} // signals run loop to update ticker
+	startTime    time.Time     // absolute start time for drift-free scheduling
 }
 
 // NewCommonTimeConductor creates a new common time conductor
@@ -22,11 +22,11 @@ type CommonTimeConductor struct {
 // bpm: beats per minute
 func NewCommonTimeConductor(ticksPerBeat int, bpm float64) *CommonTimeConductor {
 	c := &CommonTimeConductor{
-		currentTick:  0,
 		ticksPerBeat: ticksPerBeat,
 		bpm:          bpm,
 		running:      false,
 	}
+	c.currentTick.Store(0)
 	c.updateTickDuration()
 	return c
 }
@@ -42,7 +42,7 @@ func (c *CommonTimeConductor) updateTickDuration() {
 
 // GetCurrentTick implements Conductor interface
 func (c *CommonTimeConductor) GetCurrentTick() int64 {
-	return atomic.LoadInt64(&c.currentTick)
+	return c.currentTick.Load()
 }
 
 // GetTickDuration implements Conductor interface
@@ -91,6 +91,13 @@ func (c *CommonTimeConductor) GetBeat() int64 {
 	return c.GetCurrentTick() / int64(c.ticksPerBeat)
 }
 
+// GetAbsoluteTimeForTick returns the absolute wall-clock time for a given tick
+// This enables drift-free scheduling by calculating when a tick should occur
+// relative to the conductor's start time
+func (c *CommonTimeConductor) GetAbsoluteTimeForTick(tick int64) time.Time {
+	return c.startTime.Add(c.tickDuration * time.Duration(tick))
+}
+
 // Start starts the conductor's clock in a goroutine
 func (c *CommonTimeConductor) Start() {
 	if c.running {
@@ -98,21 +105,21 @@ func (c *CommonTimeConductor) Start() {
 	}
 
 	c.running = true
-	c.paused = false
 	c.stopCh = make(chan struct{})
 	c.updateCh = make(chan struct{}, 1)
+	c.startTime = time.Now() // capture absolute start time
 
 	go c.run()
 }
 
-// Pause pauses the conductor's clock (tick advancement stops)
-func (c *CommonTimeConductor) Pause() {
-	c.paused = true
-}
+// Stop stops the conductor's clock and goroutine
+func (c *CommonTimeConductor) Stop() {
+	if !c.running {
+		return
+	}
 
-// Resume resumes the conductor's clock after pause
-func (c *CommonTimeConductor) Resume() {
-	c.paused = false
+	c.running = false
+	close(c.stopCh)
 }
 
 // run is the internal tick loop
@@ -129,20 +136,18 @@ func (c *CommonTimeConductor) run() {
 			ticker.Stop()
 			ticker = time.NewTicker(c.tickDuration)
 		case <-ticker.C:
-			// Only advance tick if not paused
-			if !c.paused {
-				c.AdvanceTick()
-			}
+			c.AdvanceTick()
 		}
 	}
 }
 
 // AdvanceTick increments the tick counter (called by run loop)
 func (c *CommonTimeConductor) AdvanceTick() {
-	atomic.AddInt64(&c.currentTick, 1)
+	c.currentTick.Add(1)
 }
 
-// Reset resets the tick counter to 0
+// Reset resets the tick counter to 0 and updates start time to now
 func (c *CommonTimeConductor) Reset() {
-	atomic.StoreInt64(&c.currentTick, 0)
+	c.currentTick.Store(0)
+	c.startTime = time.Now()
 }

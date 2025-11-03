@@ -8,11 +8,9 @@ export function GetCurrentMIDIPort():Promise<number>;
 
 export function GetMIDIPorts():Promise<Array<adapters.MIDIPortInfo>>;
 
-export function Pause():Promise<string>;
+export function Play():Promise<string>;
 
 export function RemoveChannelMapping(arg1:string):Promise<void>;
-
-export function Resume():Promise<string>;
 
 export function SetChannelMapping(arg1:string,arg2:number):Promise<void>;
 

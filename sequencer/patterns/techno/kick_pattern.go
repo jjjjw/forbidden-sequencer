@@ -11,27 +11,38 @@ import (
 type KickPattern struct {
 	conductor    *conductors.CommonTimeConductor
 	lastFireTick int64
+	initialized  bool
 }
 
 // NewKickPattern creates a new kick pattern
 func NewKickPattern(c *conductors.CommonTimeConductor) *KickPattern {
 	return &KickPattern{
-		conductor:    c,
-		lastFireTick: int64(-c.GetTicksPerBeat()), // Start negative so first fire is at tick 0
+		conductor:   c,
+		initialized: false,
 	}
+}
+
+// Reset resets the pattern state
+func (k *KickPattern) Reset() {
+	k.initialized = false
 }
 
 // GetNextScheduledEvent implements the Pattern interface
 func (k *KickPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
-	currentTick := k.conductor.GetCurrentTick()
 	ticksPerBeat := k.conductor.GetTicksPerBeat()
+
+	// Initialize on first call
+	if !k.initialized {
+		k.lastFireTick = k.conductor.GetCurrentTick()
+		k.initialized = true
+	}
 
 	// Calculate next fire tick (next beat boundary)
 	nextFireTick := k.lastFireTick + int64(ticksPerBeat)
 
-	// Convert tick delta to time delta
-	tickDelta := nextFireTick - currentTick
-	timeDelta := k.conductor.GetTickDuration() * time.Duration(tickDelta)
+	// Calculate absolute wall-clock time for this tick (drift-free)
+	nextFireTime := k.conductor.GetAbsoluteTimeForTick(nextFireTick)
+	timeDelta := time.Until(nextFireTime)
 
 	// Update last fire tick
 	k.lastFireTick = nextFireTick

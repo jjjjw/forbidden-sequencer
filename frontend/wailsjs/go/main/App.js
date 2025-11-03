@@ -14,16 +14,12 @@ export function GetMIDIPorts() {
   return window['go']['main']['App']['GetMIDIPorts']();
 }
 
-export function Pause() {
-  return window['go']['main']['App']['Pause']();
+export function Play() {
+  return window['go']['main']['App']['Play']();
 }
 
 export function RemoveChannelMapping(arg1) {
   return window['go']['main']['App']['RemoveChannelMapping'](arg1);
-}
-
-export function Resume() {
-  return window['go']['main']['App']['Resume']();
 }
 
 export function SetChannelMapping(arg1, arg2) {

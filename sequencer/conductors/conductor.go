@@ -14,9 +14,9 @@ type Conductor interface {
 	// Start starts the conductor's clock
 	Start()
 
-	// Pause pauses the conductor's clock (tick advancement stops)
-	Pause()
+	// Stop stops the conductor's clock and goroutine
+	Stop()
 
-	// Resume resumes the conductor's clock after pause
-	Resume()
+	// Reset resets the conductor to initial state (tick 0, new start time)
+	Reset()
 }

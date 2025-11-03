@@ -10,9 +10,10 @@ import (
 
 func TestKickPattern_FiresOnBeats(t *testing.T) {
 	conductor := conductors.NewCommonTimeConductor(4, 120) // 4 ticks/beat, 120 BPM
+	conductor.Reset()                                       // Initialize start time without starting tick loop
 	kick := NewKickPattern(conductor)
 
-	// First call should fire on beat 0 (tick 0)
+	// First call fires at current + beat (tick 0, nextFireTick = 0+4 = 4)
 	scheduled, err := kick.GetNextScheduledEvent()
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -30,27 +31,29 @@ func TestKickPattern_FiresOnBeats(t *testing.T) {
 		t.Errorf("Expected MIDI note 36, got %f", scheduled.Event.A)
 	}
 
-	// Delta should be 0 ticks (firing on tick 0 from tick 0)
-	expectedDelta := conductor.GetTickDuration() * 0
-	if scheduled.Timing.Delta != expectedDelta {
-		t.Errorf("Expected delta %v, got %v", expectedDelta, scheduled.Timing.Delta)
+	// Delta should be 4 ticks (from tick 0 to tick 4) - with tolerance for timing precision
+	expectedDelta := conductor.GetTickDuration() * 4
+	tolerance := 1 * time.Millisecond
+	if scheduled.Timing.Delta < expectedDelta-tolerance || scheduled.Timing.Delta > expectedDelta+tolerance {
+		t.Errorf("Expected delta %v (±%v), got %v", expectedDelta, tolerance, scheduled.Timing.Delta)
 	}
 
-	// Second call should schedule for next beat (tick 4)
+	// Second call should schedule for next beat (tick 8)
 	scheduled, err = kick.GetNextScheduledEvent()
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	// Delta should be 4 ticks (from tick 0 to tick 4)
-	expectedDelta = conductor.GetTickDuration() * 4
-	if scheduled.Timing.Delta != expectedDelta {
-		t.Errorf("Expected delta %v for next beat, got %v", expectedDelta, scheduled.Timing.Delta)
+	// Delta should be 8 ticks (from tick 0 to tick 8) - with tolerance for timing precision
+	expectedDelta = conductor.GetTickDuration() * 8
+	if scheduled.Timing.Delta < expectedDelta-tolerance || scheduled.Timing.Delta > expectedDelta+tolerance {
+		t.Errorf("Expected delta %v (±%v) for next beat, got %v", expectedDelta, tolerance, scheduled.Timing.Delta)
 	}
 }
 
 func TestKickPattern_ConsistentBeatInterval(t *testing.T) {
 	conductor := conductors.NewCommonTimeConductor(4, 120)
+	conductor.Reset()
 	kick := NewKickPattern(conductor)
 
 	// Generate several events and verify they're all one beat apart
