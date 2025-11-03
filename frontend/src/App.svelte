@@ -1,5 +1,6 @@
 <script lang="ts">
   import Settings from './components/Settings.svelte';
+  import { Pause, Resume } from '../wailsjs/go/main/App';
 
   enum View {
     Main = 'main',
@@ -9,9 +10,18 @@
   let paused = true;
   let currentView: View = View.Main;
 
-  function togglePause() {
-    paused = !paused;
-    // TODO: Call Go backend to pause/resume sequencer
+  async function togglePause() {
+    try {
+      if (paused) {
+        await Resume();
+        paused = false;
+      } else {
+        await Pause();
+        paused = true;
+      }
+    } catch (err) {
+      console.error('Failed to toggle pause:', err);
+    }
   }
 
   function showSettings() {

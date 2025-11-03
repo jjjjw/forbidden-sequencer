@@ -50,8 +50,11 @@ func (a *App) startup(ctx context.Context) {
 		midiAdapter.SetChannelMapping(eventName, channel)
 	}
 
-	// Create techno sequencer (120 BPM, 4 ticks per beat = 16th notes)
-	a.sequencer = sequencers.NewTechnoSequencer(120, 4, midiAdapter, false)
+	// Create techno sequencer (120 BPM, 8 ticks per beat = 16th notes)
+	a.sequencer = sequencers.NewTechnoSequencer(120, 8, midiAdapter, false)
+
+	// For now, start the sequencer on initialization
+	a.StartTechno()
 }
 
 // StartTechno starts the techno sequencer

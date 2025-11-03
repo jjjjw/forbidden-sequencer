@@ -95,6 +95,9 @@ func (s *Sequencer) runPattern(index int) {
 
 			// Send to adapter (fires immediately)
 			if s.adapter != nil {
+				if s.debug == true {
+					log.Println("Sending message %", scheduled)
+				}
 				if err := s.adapter.Send(scheduled); err != nil {
 					s.handleError(fmt.Sprintf("pattern %d adapter error: %v", index, err))
 					continue
