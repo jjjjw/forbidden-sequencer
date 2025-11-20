@@ -18,13 +18,14 @@ type Pattern interface {
 
 // Sequencer manages multiple patterns and outputs events through an adapter
 type Sequencer struct {
-	patterns  []Pattern
-	adapter   adapters.EventAdapter
-	conductor conductors.Conductor
-	debug     bool
-	running   bool
-	paused    bool
-	stopCh    chan struct{}
+	patterns      []Pattern
+	adapter       adapters.EventAdapter
+	conductor     conductors.Conductor
+	debug         bool
+	running       bool
+	paused        bool
+	stopCh        chan struct{}
+	OnEvent       func(events.ScheduledEvent)
 }
 
 // NewSequencer creates a new sequencer with the given patterns, conductor, and adapter
@@ -39,7 +40,7 @@ func NewSequencer(patterns []Pattern, conductor conductors.Conductor, adapter ad
 	}
 }
 
-// Start starts or restarts the sequencer
+// Start initializes the sequencer (called once at startup, begins paused)
 func (s *Sequencer) Start() {
 	// Stop any existing run
 	if s.running {
@@ -48,6 +49,7 @@ func (s *Sequencer) Start() {
 	}
 
 	s.running = true
+	s.paused = true
 	s.stopCh = make(chan struct{})
 
 	// Start conductor
@@ -117,6 +119,11 @@ func (s *Sequencer) runPattern(index int) {
 					s.handleError(fmt.Sprintf("pattern %d adapter error: %v", index, err))
 					continue
 				}
+			}
+
+			// Call event callback for TUI display
+			if s.OnEvent != nil {
+				s.OnEvent(scheduled)
 			}
 		}
 	}

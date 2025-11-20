@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"encoding/json"
@@ -8,12 +8,6 @@ import (
 
 	"github.com/adrg/xdg"
 )
-
-// Settings represents persisted application settings
-type Settings struct {
-	MIDIPort        int              `json:"midiPort"`
-	ChannelMappings map[string]uint8 `json:"channelMappings"`
-}
 
 // getSettingsPath returns the path to the settings file
 func getSettingsPath() (string, error) {
