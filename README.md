@@ -108,19 +108,43 @@ sequencer.Start()
   - Result: Bass automatically mutes when kick plays, no direct coupling
 - [ ] Build Controller for frontend parameter mapping
 - [ ] Build pattern library (LogarithmicTiming, ClusterStructure, VelocityCurve)
-- [ ] Frontend control rendering + keyboard bindings
 
 ## Development
 
-### Live Development
+### Running
 
-Run `wails dev` in the project directory for hot reload.
+```bash
+go run .
+```
 
-Dev server: http://localhost:34115
+Or build and run:
+```bash
+go build -o forbidden-sequencer .
+./forbidden-sequencer
+```
 
-### Building
+### Controls
 
-Build production package: `wails build`
+**Main Screen:**
+- `space/p` - Play/Stop sequencer
+- `s` - Settings
+- `q` - Quit
+
+**Settings Screen:**
+- `j/k` or arrows - Navigate
+- `enter` - Select option
+- `esc` - Back
+
+**MIDI Port / Channel Mapping:**
+- `j/k` or arrows - Navigate
+- `enter` - Select/Edit
+- `esc` - Back to Settings
+
+### Requirements
+
+- Go 1.24+
+- A MIDI output port (virtual or physical)
+  - On macOS: Enable IAC Driver in Audio MIDI Setup > Window > Show MIDI Studio
 
 ### Testing
 
