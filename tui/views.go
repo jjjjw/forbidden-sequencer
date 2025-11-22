@@ -67,6 +67,7 @@ func (m Model) viewMain() string {
 	// Help
 	help := []string{
 		"[space/p] Play/Stop",
+		"[r] Reset",
 		"[s] Settings",
 		"[q] Quit",
 	}
@@ -76,10 +77,17 @@ func (m Model) viewMain() string {
 }
 
 func (m Model) viewEventLog() string {
-	// All event types to display
-	eventTypes := []string{"kick", "hihat"}
-
 	var indicators []string
+
+	// Beat indicator
+	if m.BeatActive {
+		indicators = append(indicators, BeatActiveStyle.Render("beat"))
+	} else {
+		indicators = append(indicators, BeatInactiveStyle.Render("beat"))
+	}
+
+	// Event indicators
+	eventTypes := []string{"kick", "hihat"}
 	for _, eventType := range eventTypes {
 		active := m.ActiveEvents != nil && m.ActiveEvents[eventType]
 		if active {

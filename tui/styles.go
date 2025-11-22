@@ -55,4 +55,19 @@ var (
 				Bold(true).
 				Padding(0, 1).
 				Width(10)
+
+	// Beat indicator styles
+	BeatInactiveStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("240")).
+				Padding(0, 1).
+				Width(6)
+
+	BeatActiveStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("46")).
+			Foreground(lipgloss.Color("46")).
+			Bold(true).
+			Padding(0, 1).
+			Width(6)
 )

@@ -2,6 +2,9 @@ package conductors
 
 import "time"
 
+// TickCallback is called on each tick
+type TickCallback func(tick int64)
+
 // Conductor is a minimal tick-based clock interface
 // Implementations may add domain-specific time concepts (e.g., beats, measures)
 type Conductor interface {
@@ -11,12 +14,9 @@ type Conductor interface {
 	// GetTickDuration returns the duration of a single tick
 	GetTickDuration() time.Duration
 
-	// Start starts the conductor's clock
+	// Start begins ticking (runs continuously once started)
 	Start()
 
-	// Stop stops the conductor's clock and goroutine
-	Stop()
-
-	// Reset resets the conductor to initial state (tick 0, new start time)
-	Reset()
+	// GetBeatsChannel returns the channel for beat events
+	GetBeatsChannel() chan int64
 }

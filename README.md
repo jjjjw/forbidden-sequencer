@@ -12,34 +12,28 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 - Example: frequency in Hz (not MIDI notes)
 
 **Pattern** - Stateful event generator
-- Interface: `GetNextScheduledEvent() (ScheduledEvent, error)`
+- Interface: `GetNextScheduledEvent()`, `Reset()`, `Play()`, `Stop()`
 - Receives Conductor reference at construction time
-- Stores conductor internally for timing queries
 - Returns ScheduledEvents with Delta calculated from conductor's tick state
-- Each pattern runs in its own goroutine
-- Maintains internal state (conductor, lastFireTick, etc.)
+- Maintains internal state (isKick, lastBeatTick, paused)
+- When paused, returns short rests (10ms)
+- When playing, calculates next event timing from conductor
 
 **Conductor** - Tick-based master clock
-- Minimal interface: `GetCurrentTick()`, `GetTickDuration()`, `Start()`, `Reset()`
-- Runs in its own goroutine, advancing ticks at precise intervals based on absolute wall-clock time
-- Single source of truth for timing (prevents drift)
-- `Reset()` returns to tick 0 and captures new start time reference
-- `CommonTimeConductor` implementation adds:
-  - Beat-awareness (ticksPerBeat, BPM)
-  - Musical time helpers (IsBeatStart, GetTickInBeat, GetBeat)
-  - Dynamic tempo changes via SetBPM()
-  - Absolute time tracking via `GetAbsoluteTimeForTick()` for drift-free scheduling
-- Patterns query conductor but cannot mutate it (read-only interface)
+- Minimal interface: `GetCurrentTick()`, `GetTickDuration()`, `Start()`, `GetBeatsChannel()`
+- Runs continuously once started, advancing ticks at precise intervals
+- Uses absolute wall-clock time for drift-free scheduling
+- `CommonTimeConductor` adds beat-awareness (ticksPerBeat, BPM)
+- `GetNextBeatTick()` returns next beat boundary tick
+- `GetAbsoluteTimeForTick()` converts tick to wall-clock time
+- Beats channel sends beat events to TUI
+- Patterns query conductor but cannot mutate it (read-only)
 
 **Sequencer** - Pattern orchestration
 - Manages pattern list and conductor lifecycle
-- Starts conductor in its own goroutine
-- Launches each pattern in its own goroutine
-- Each pattern independently queries conductor and sends events to adapter
-- Provides playback controls: Start(), Play(), Stop()
-- Stop() resets conductor (tick 0, new start time) and all patterns
-- Play() resumes pattern processing from current conductor state
-- TODO: Pause/Resume (pause conductor + patterns, resume without reset)
+- Starts conductor and schedules pattern events
+- Delegates Play/Stop/Reset to patterns
+- Events channel for sending scheduled events to TUI
 
 **Controller** - Frontend ↔ Backend bridge
 - Receives control changes from frontend
@@ -52,42 +46,31 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 
 ### System Flow
 
-**Three independent goroutines:**
-1. **Conductor loop:** Advances ticks at precise intervals (tickDuration)
-2. **Pattern loops (one per pattern):** Each pattern independently:
-   - Queries conductor for current tick
-   - Calculates next fire tick based on musical logic
-   - Computes Delta as `(nextFireTick - currentTick) * tickDuration`
-   - Sleeps for Delta
-   - Sends ScheduledEvent to adapter
+**Goroutines:**
+1. **Conductor loop:** Advances ticks using absolute time scheduling
+2. **Pattern scheduling:** Sequencer schedules each pattern's events via AfterFunc
 3. **Adapter goroutines:** Handle MIDI note on/off timing
 
 **Key properties:**
-- Patterns can drift from conductor or stay in sync (their choice)
-- Conductor ticks continue during pause (patterns check pause state)
+- Conductor runs continuously, patterns handle their own pause state
+- Patterns return rests when paused, events when playing
 - No shared mutable state between patterns (conductor is read-only)
-- Supports both realtime (sleep on Delta) and non-realtime (collect events)
 
 ### Concrete Example: Techno Sequencer
 
 **Setup:**
 ```go
-conductor := NewCommonTimeConductor(4, 120) // 4 ticks/beat, 120 BPM
-kick := NewKickPattern(conductor)           // Fires every beat
-hihat := NewHihatPattern(conductor)         // Fires every half-beat
-sequencer := NewSequencer([]Pattern{kick, hihat}, conductor, midiAdapter, false)
+conductor := NewCommonTimeConductor(120) // 120 BPM
+pattern := NewTechnoPattern(conductor)   // Alternates kick and hihat
+sequencer := NewSequencer([]Pattern{pattern}, conductor, midiAdapter, false)
 sequencer.Start()
+sequencer.Play()
 ```
 
-**Kick pattern logic:**
-- Stores conductor reference
-- `k.conductor.GetCurrentTick() % k.conductor.GetTicksPerBeat() == 0` → on beat boundary
-- Fires MIDI note 36 (bass drum)
-
-**Hihat pattern logic:**
-- Stores conductor reference
-- Fires on half-beat (ticksPerBeat/2)
-- Fires MIDI note 42 (closed hihat)
+**Techno pattern logic:**
+- Alternates kick and hihat using internal state
+- Uses `GetNextBeatTick()` to schedule kicks on beat boundaries
+- Schedules hihats half a beat after each kick
 
 **Result:** "boom tick boom tick" techno beat at 120 BPM
 
@@ -99,7 +82,7 @@ sequencer.Start()
 - [x] Create basic patterns (Kick, Hihat)
 - [x] Create Techno sequencer factory
 - [x] Implement drift-free absolute time scheduling
-- [ ] Implement Pause/Resume (pause conductor ticking + pattern processing, resume without reset)
+- [x] Implement Play/Stop/Reset controls
 - [ ] Add coordination primitives to Conductor (scratch space for pattern communication)
 - [ ] Example: Kick Mutes Bass pattern coordination
   - Kick pattern writes to Conductor scratch space when it fires
@@ -127,6 +110,7 @@ go build -o forbidden-sequencer .
 
 **Main Screen:**
 - `space/p` - Play/Stop sequencer
+- `r` - Reset to beginning
 - `s` - Settings
 - `q` - Quit
 
@@ -175,8 +159,7 @@ sequencer/
 │   └── common_time_conductor.go # Beat-aware implementation
 ├── patterns/
 │   └── techno/
-│       ├── kick_pattern.go   # Kick on every beat
-│       └── hihat_pattern.go  # Hihat on off-beats
+│       └── techno_pattern.go # Alternating kick and hihat
 ├── sequencers/
 │   ├── sequencer.go          # Pattern interface + orchestration
 │   └── techno.go             # Techno sequencer factory

@@ -16,8 +16,7 @@ import (
 type MIDIAdapter struct {
 	out            drivers.Out
 	send           func(msg midi.Message) error
-	active         map[string]noteState // track active notes for note-off
-	channelMapping map[string]uint8     // maps event names to MIDI channels
+	channelMapping map[string]uint8 // maps event names to MIDI channels
 	driver         *rtmididrv.Driver
 	currentPort    int
 }
@@ -26,11 +25,6 @@ type MIDIAdapter struct {
 type MIDIPortInfo struct {
 	Index int
 	Name  string
-}
-
-type noteState struct {
-	midiNote uint8
-	channel  uint8
 }
 
 // NewMIDIAdapter creates a new MIDI adapter
@@ -75,7 +69,6 @@ func NewMIDIAdapter(portIndex int) (*MIDIAdapter, error) {
 	return &MIDIAdapter{
 		out:            out,
 		send:           send,
-		active:         make(map[string]noteState),
 		channelMapping: make(map[string]uint8),
 		driver:         drv,
 		currentPort:    port,
@@ -134,11 +127,8 @@ func (m *MIDIAdapter) ListAvailablePorts() ([]MIDIPortInfo, error) {
 
 // SetPort changes the MIDI output port
 func (m *MIDIAdapter) SetPort(portIndex int) error {
-	// Stop all active notes
-	for name, state := range m.active {
-		m.send(midi.NoteOff(state.channel, state.midiNote))
-		delete(m.active, name)
-	}
+	// Send NoteOff to all channels in use
+	m.allNotesOff()
 
 	// Close current port
 	if m.out != nil {
@@ -209,16 +199,11 @@ func (m *MIDIAdapter) sendNote(scheduled events.ScheduledEvent) error {
 		return fmt.Errorf("failed to send note on: %w", err)
 	}
 
-	// Track active note
-	m.active[event.Name] = noteState{midiNote: midiNote, channel: channel}
-
 	// Schedule note off after duration
 	if timing.Duration > 0 {
-		go func() {
-			time.Sleep(timing.Duration)
+		time.AfterFunc(timing.Duration, func() {
 			m.send(midi.NoteOff(channel, midiNote))
-			delete(m.active, event.Name)
-		}()
+		})
 	}
 
 	return nil
@@ -243,16 +228,25 @@ func (m *MIDIAdapter) sendCC(scheduled events.ScheduledEvent) error {
 
 // Close closes the MIDI output
 func (m *MIDIAdapter) Close() error {
-	// Send note off for all active notes
-	for name, state := range m.active {
-		m.send(midi.NoteOff(state.channel, state.midiNote))
-		delete(m.active, name)
-	}
+	m.allNotesOff()
 
 	if m.out != nil {
 		return m.out.Close()
 	}
 	return nil
+}
+
+// allNotesOff sends NoteOff for all notes on all channels in use
+func (m *MIDIAdapter) allNotesOff() {
+	if m.send == nil {
+		return
+	}
+	// Send NoteOff for all 128 notes on each channel in use
+	for _, channel := range m.channelMapping {
+		for note := uint8(0); note < 128; note++ {
+			m.send(midi.NoteOff(channel, note))
+		}
+	}
 }
 
 // frequencyToMIDI converts frequency in Hz to MIDI note number

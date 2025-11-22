@@ -15,6 +15,12 @@ type EventMsg events.ScheduledEvent
 // ClearEventMsg clears an event's active state
 type ClearEventMsg string
 
+// BeatMsg is sent when the conductor hits a beat
+type BeatMsg int64
+
+// ClearBeatMsg clears the beat indicator
+type ClearBeatMsg struct{}
+
 // Init implements tea.Model
 func (m Model) Init() tea.Cmd {
 	return nil
@@ -39,8 +45,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.ActiveEvents[event.Event.Name] = true
-		// Schedule clear after 50ms
-		return m, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+		// Schedule clear after event duration
+		duration := event.Timing.Duration
+		if duration <= 0 {
+			duration = 50 * time.Millisecond // fallback
+		}
+		return m, tea.Tick(duration, func(t time.Time) tea.Msg {
 			return ClearEventMsg(event.Event.Name)
 		})
 
@@ -49,6 +59,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ActiveEvents != nil {
 			m.ActiveEvents[string(msg)] = false
 		}
+		return m, nil
+
+	case BeatMsg:
+		// Set beat as active
+		m.BeatActive = true
+		// Schedule clear after short duration
+		return m, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+			return ClearBeatMsg{}
+		})
+
+	case ClearBeatMsg:
+		m.BeatActive = false
 		return m, nil
 
 	case tea.KeyMsg:
@@ -100,6 +122,12 @@ func (m Model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.Sequencer.Play()
 				m.IsPlaying = true
 			}
+		}
+
+	case "r":
+		// Reset to beginning
+		if m.Sequencer != nil {
+			m.Sequencer.Reset()
 		}
 
 	case "s":

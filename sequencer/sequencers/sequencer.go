@@ -14,18 +14,17 @@ import (
 type Pattern interface {
 	GetNextScheduledEvent() (events.ScheduledEvent, error)
 	Reset()
+	Play()
+	Stop()
 }
 
 // Sequencer manages multiple patterns and outputs events through an adapter
 type Sequencer struct {
-	patterns      []Pattern
-	adapter       adapters.EventAdapter
-	conductor     conductors.Conductor
-	debug         bool
-	running       bool
-	paused        bool
-	stopCh        chan struct{}
-	OnEvent       func(events.ScheduledEvent)
+	patterns  []Pattern
+	adapter   adapters.EventAdapter
+	conductor conductors.Conductor
+	debug     bool
+	Events    chan events.ScheduledEvent
 }
 
 // NewSequencer creates a new sequencer with the given patterns, conductor, and adapter
@@ -35,98 +34,81 @@ func NewSequencer(patterns []Pattern, conductor conductors.Conductor, adapter ad
 		conductor: conductor,
 		adapter:   adapter,
 		debug:     debug,
-		running:   false,
-		paused:    true,
+		Events:    make(chan events.ScheduledEvent, 100),
 	}
 }
 
-// Start initializes the sequencer (called once at startup, begins paused)
+// Start initializes and starts the sequencer
 func (s *Sequencer) Start() {
-	// Stop any existing run
-	if s.running {
-		close(s.stopCh)
-		s.conductor.Stop()
-	}
-
-	s.running = true
-	s.paused = true
-	s.stopCh = make(chan struct{})
-
 	// Start conductor
 	s.conductor.Start()
 
-	// Start a goroutine for each pattern
+	// Schedule first event for each pattern
 	for i := range s.patterns {
-		go s.runPattern(i)
+		s.scheduleNextEvent(i)
 	}
 }
 
-// Stop stops playback (patterns silence, conductor stops)
+// Stop pauses all patterns
 func (s *Sequencer) Stop() {
-	s.paused = true
-
-	// Stop conductor
-	s.conductor.Stop()
+	for _, pattern := range s.patterns {
+		pattern.Stop()
+	}
 }
 
-// Play starts playback (patterns start generating events from tick 0)
+// Play resumes all patterns
 func (s *Sequencer) Play() {
-	// Reset conductor to tick 0 with new start time
-	s.conductor.Reset()
+	for _, pattern := range s.patterns {
+		pattern.Play()
+	}
+}
 
-	// Reset all patterns so they re-sync on play
+// Reset resets all patterns
+func (s *Sequencer) Reset() {
 	for _, pattern := range s.patterns {
 		pattern.Reset()
 	}
-
-	// Start conductor again
-	s.conductor.Start()
-
-	s.paused = false
 }
 
-// runPattern runs a single pattern's event loop
-func (s *Sequencer) runPattern(index int) {
+// scheduleNextEvent schedules the next event for a pattern using AfterFunc
+func (s *Sequencer) scheduleNextEvent(index int) {
 	pattern := s.patterns[index]
 
-	for {
-		select {
-		case <-s.stopCh:
-			return
-		default:
-			// Check if paused - if so, sleep briefly and continue
-			if s.paused {
-				time.Sleep(10 * time.Millisecond)
-				continue
+	// Get next scheduled event from pattern
+	scheduled, err := pattern.GetNextScheduledEvent()
+	if err != nil {
+		s.handleError(fmt.Sprintf("pattern %d error: %v", index, err))
+		// Retry after a short delay
+		time.AfterFunc(10*time.Millisecond, func() {
+			s.scheduleNextEvent(index)
+		})
+		return
+	}
+
+	// Schedule the event to fire after Delta
+	time.AfterFunc(scheduled.Timing.Delta, func() {
+		// Send to adapter
+		if s.adapter != nil {
+			if s.debug {
+				log.Println("Sending message %", scheduled)
 			}
-
-			// Get next scheduled event from pattern
-			scheduled, err := pattern.GetNextScheduledEvent()
-			if err != nil {
-				s.handleError(fmt.Sprintf("pattern %d error: %v", index, err))
-				continue
-			}
-
-			// Wait until it's time to fire the event
-			time.Sleep(scheduled.Timing.Delta)
-
-			// Send to adapter (fires immediately)
-			if s.adapter != nil {
-				if s.debug == true {
-					log.Println("Sending message %", scheduled)
-				}
-				if err := s.adapter.Send(scheduled); err != nil {
-					s.handleError(fmt.Sprintf("pattern %d adapter error: %v", index, err))
-					continue
-				}
-			}
-
-			// Call event callback for TUI display
-			if s.OnEvent != nil {
-				s.OnEvent(scheduled)
+			if err := s.adapter.Send(scheduled); err != nil {
+				s.handleError(fmt.Sprintf("pattern %d adapter error: %v", index, err))
 			}
 		}
-	}
+
+		// Send event to channel for TUI display
+		if s.Events != nil {
+			select {
+			case s.Events <- scheduled:
+			default:
+				// Don't block if channel is full
+			}
+		}
+
+		// Schedule next event
+		s.scheduleNextEvent(index)
+	})
 }
 
 // handleError handles errors based on debug mode
@@ -139,4 +121,14 @@ func (s *Sequencer) handleError(msg string) {
 		log.Println(msg)
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+// GetEventsChannel returns the channel for scheduled events
+func (s *Sequencer) GetEventsChannel() chan events.ScheduledEvent {
+	return s.Events
+}
+
+// GetBeatsChannel returns the conductor's beats channel
+func (s *Sequencer) GetBeatsChannel() chan int64 {
+	return s.conductor.GetBeatsChannel()
 }

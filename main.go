@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"forbidden_sequencer/sequencer/adapters"
-	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/sequencers"
 	"forbidden_sequencer/tui"
 
@@ -43,8 +42,8 @@ func initialModel() tui.Model {
 		midiAdapter.SetChannelMapping(eventName, channel)
 	}
 
-	// Create techno sequencer (120 BPM, 8 ticks per beat = 16th notes)
-	m.Sequencer = sequencers.NewTechnoSequencer(120, 8, midiAdapter, false)
+	// Create techno sequencer (120 BPM, 8 ticks per beat = 32nd notes)
+	m.Sequencer = sequencers.NewTechnoSequencer(120, midiAdapter, false)
 
 	// Initialize sequencer (starts paused)
 	m.Sequencer.Start()
@@ -65,11 +64,20 @@ func main() {
 	m := initialModel()
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
-	// Set up event callback to send messages to TUI
+	// Set up goroutines to forward channel events to TUI
 	if m.Sequencer != nil {
-		m.Sequencer.OnEvent = func(event events.ScheduledEvent) {
-			p.Send(tui.EventMsg(event))
-		}
+		// Forward events
+		go func() {
+			for event := range m.Sequencer.GetEventsChannel() {
+				p.Send(tui.EventMsg(event))
+			}
+		}()
+		// Forward beats
+		go func() {
+			for beat := range m.Sequencer.GetBeatsChannel() {
+				p.Send(tui.BeatMsg(beat))
+			}
+		}()
 	}
 
 	if _, err := p.Run(); err != nil {

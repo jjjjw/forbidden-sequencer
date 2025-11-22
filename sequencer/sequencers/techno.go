@@ -8,19 +8,18 @@ import (
 
 // NewTechnoSequencer creates a techno sequencer with kick and hihat patterns
 // bpm: beats per minute
-// ticksPerBeat: tick resolution (4 = 16th notes, 8 = 32nd notes)
 // adapter: MIDI or other output adapter
 // debug: debug mode flag
-func NewTechnoSequencer(bpm float64, ticksPerBeat int, adapter adapters.EventAdapter, debug bool) *Sequencer {
+func NewTechnoSequencer(bpm float64, adapter adapters.EventAdapter, debug bool) *Sequencer {
 	// Create conductor
-	conductor := conductors.NewCommonTimeConductor(ticksPerBeat, bpm)
+	// ticksPerBeat: tick resolution (4 = 16th notes, 8 = 32nd notes)
+	conductor := conductors.NewCommonTimeConductor(bpm, 4)
 
-	// Create patterns with conductor reference
-	kick := techno.NewKickPattern(conductor)
-	hihat := techno.NewHihatPattern(conductor)
+	// Create pattern with conductor reference
+	pattern := techno.NewTechnoPattern(conductor)
 
 	// Assemble into sequencer
-	patternsSlice := []Pattern{kick, hihat}
+	patternsSlice := []Pattern{pattern}
 
 	return NewSequencer(patternsSlice, conductor, adapter, debug)
 }
