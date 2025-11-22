@@ -6,12 +6,13 @@ import (
 
 // CommonTimeConductor implements a tick-based conductor with common time (beat-based) concepts
 type CommonTimeConductor struct {
-	currentTick  int64
 	tickDuration time.Duration
 	ticksPerBeat int
 	bpm          float64
-	startTime    time.Time // absolute start time for drift-free scheduling
-	Beats        chan int64
+	lastBeatTime time.Time // time of the last beat
+	lastTickTime time.Time // time of the last tick
+	tickInBeat   int       // current tick within the beat (0 to ticksPerBeat-1)
+	Beats        chan struct{}
 }
 
 // NewCommonTimeConductor creates a new common time conductor
@@ -21,8 +22,8 @@ func NewCommonTimeConductor(bpm float64, ticksPerBeat int) *CommonTimeConductor 
 	c := &CommonTimeConductor{
 		ticksPerBeat: ticksPerBeat,
 		bpm:          bpm,
-		currentTick:  0,
-		Beats:        make(chan int64, 100),
+		tickInBeat:   0,
+		Beats:        make(chan struct{}, 100),
 	}
 	c.updateTickDuration()
 	return c
@@ -37,12 +38,7 @@ func (c *CommonTimeConductor) updateTickDuration() {
 	c.tickDuration = time.Duration(secondsPerTick * float64(time.Second))
 }
 
-// GetCurrentTick implements Conductor interface
-func (c *CommonTimeConductor) GetCurrentTick() int64 {
-	return c.currentTick
-}
-
-// GetTickDuration implements Conductor interface
+// GetTickDuration returns the duration of a single tick
 func (c *CommonTimeConductor) GetTickDuration() time.Duration {
 	return c.tickDuration
 }
@@ -52,32 +48,29 @@ func (c *CommonTimeConductor) GetTicksPerBeat() int {
 	return c.ticksPerBeat
 }
 
-// GetNextBeatTick returns the tick number of the next beat boundary
-func (c *CommonTimeConductor) GetNextBeatTick() int64 {
-	currentTick := c.GetCurrentTick()
-	ticksPerBeat := int64(c.ticksPerBeat)
-	// Calculate ticks until next beat using modulo
-	ticksUntilBeat := ticksPerBeat - (currentTick % ticksPerBeat)
-	return currentTick + ticksUntilBeat
+// GetNextBeatTime returns the absolute wall-clock time of the next beat boundary
+func (c *CommonTimeConductor) GetNextBeatTime() time.Time {
+	beatDuration := c.tickDuration * time.Duration(c.ticksPerBeat)
+	return c.lastBeatTime.Add(beatDuration)
 }
 
-// GetAbsoluteTimeForTick returns the absolute wall-clock time for a given tick
-// This enables drift-free scheduling by calculating when a tick should occur
-// relative to the conductor's start time
-func (c *CommonTimeConductor) GetAbsoluteTimeForTick(tick int64) time.Time {
-	return c.startTime.Add(c.tickDuration * time.Duration(tick))
+// GetNextTickTime returns the absolute wall-clock time of the next tick
+func (c *CommonTimeConductor) GetNextTickTime() time.Time {
+	return c.lastTickTime.Add(c.tickDuration)
 }
 
 // Start begins ticking continuously
 func (c *CommonTimeConductor) Start() {
-	c.startTime = time.Now()
+	now := time.Now()
+	c.lastBeatTime = now
+	c.lastTickTime = now
+	c.tickInBeat = 0
 	c.scheduleNextTick()
 }
 
 // scheduleNextTick schedules the next tick using AfterFunc
 func (c *CommonTimeConductor) scheduleNextTick() {
-	nextTick := c.GetCurrentTick() + 1
-	nextTickTime := c.GetAbsoluteTimeForTick(nextTick)
+	nextTickTime := c.GetNextTickTime()
 	delay := time.Until(nextTickTime)
 
 	time.AfterFunc(delay, func() {
@@ -88,19 +81,41 @@ func (c *CommonTimeConductor) scheduleNextTick() {
 
 // AdvanceTick increments the tick counter (called by run loop)
 func (c *CommonTimeConductor) AdvanceTick() {
-	c.currentTick++
-	// Send beat number on beat boundaries
-	if c.Beats != nil && c.currentTick%int64(c.ticksPerBeat) == 0 {
-		beat := c.currentTick / int64(c.ticksPerBeat)
-		select {
-		case c.Beats <- beat:
-		default:
-			// Don't block if channel is full
+	c.lastTickTime = c.GetNextTickTime()
+	c.tickInBeat++
+
+	// Check if we've completed a beat
+	if c.tickInBeat >= c.ticksPerBeat {
+		c.tickInBeat = 0
+		c.lastBeatTime = c.lastTickTime
+
+		// Send beat notification
+		if c.Beats != nil {
+			select {
+			case c.Beats <- struct{}{}:
+			default:
+				// Don't block if channel is full
+			}
 		}
 	}
 }
 
 // GetBeatsChannel returns the channel for beat events
-func (c *CommonTimeConductor) GetBeatsChannel() chan int64 {
+func (c *CommonTimeConductor) GetBeatsChannel() chan struct{} {
 	return c.Beats
+}
+
+// GetLastBeatTime returns the time of the last beat
+func (c *CommonTimeConductor) GetLastBeatTime() time.Time {
+	return c.lastBeatTime
+}
+
+// GetLastTickTime returns the time of the last tick
+func (c *CommonTimeConductor) GetLastTickTime() time.Time {
+	return c.lastTickTime
+}
+
+// GetTickInBeat returns the current tick position within the beat (0 to ticksPerBeat-1)
+func (c *CommonTimeConductor) GetTickInBeat() int {
+	return c.tickInBeat
 }

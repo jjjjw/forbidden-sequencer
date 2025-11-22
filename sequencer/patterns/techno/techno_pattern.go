@@ -9,31 +9,29 @@ import (
 
 // TechnoPattern generates alternating kick and hihat events
 type TechnoPattern struct {
-	conductor    *conductors.CommonTimeConductor
-	isKick       bool  // true = kick next, false = hihat next
-	lastBeatTick int64 // the beat tick we're currently working on
-	paused       bool
+	conductor *conductors.CommonTimeConductor
+	isKick    bool // true = kick next, false = hihat next
+	paused    bool
 }
 
 // NewTechnoPattern creates a new techno pattern
 func NewTechnoPattern(c *conductors.CommonTimeConductor) *TechnoPattern {
 	return &TechnoPattern{
-		conductor:    c,
-		isKick:       true, // start with kick
-		lastBeatTick: 0,
-		paused:       true,
+		conductor: c,
+		isKick:    true, // start with kick
+		paused:    true,
 	}
 }
 
 // Reset resets the pattern state to start with kick
 func (t *TechnoPattern) Reset() {
 	t.isKick = true
-	t.lastBeatTick = t.conductor.GetNextBeatTick()
 }
 
 // Play resumes the pattern
 func (t *TechnoPattern) Play() {
 	t.paused = false
+	// t.isKick = true
 }
 
 // Stop pauses the pattern
@@ -57,26 +55,23 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 		}, nil
 	}
 
+	tickDuration := t.conductor.GetTickDuration()
 	ticksPerBeat := t.conductor.GetTicksPerBeat()
-	halfBeat := ticksPerBeat / 2
+	beatDuration := tickDuration * time.Duration(ticksPerBeat)
+	halfBeatDuration := beatDuration / 2
 
-	var nextFireTick int64
+	// Get next beat time from conductor
+	nextBeatTime := t.conductor.GetNextBeatTime()
+
+	var nextFireTime time.Time
 	if t.isKick {
-		// Kick fires on next beat boundary after lastBeatTick
-		nextBeat := t.conductor.GetNextBeatTick()
-		if nextBeat <= t.lastBeatTick {
-			// Already scheduled this beat, advance to next one
-			nextBeat = t.lastBeatTick + int64(ticksPerBeat)
-		}
-		t.lastBeatTick = nextBeat
-		nextFireTick = t.lastBeatTick
+		// Kick fires on next beat boundary
+		nextFireTime = nextBeatTime
 	} else {
-		// Hihat fires half a beat after the kick
-		nextFireTick = t.lastBeatTick + int64(halfBeat)
+		// Hihat fires half a beat before the next beat (i.e., half beat after last kick)
+		nextFireTime = nextBeatTime.Add(-halfBeatDuration)
 	}
 
-	// Calculate absolute wall-clock time for this tick (drift-free)
-	nextFireTime := t.conductor.GetAbsoluteTimeForTick(nextFireTick)
 	timeDelta := time.Until(nextFireTime)
 
 	var event events.ScheduledEvent

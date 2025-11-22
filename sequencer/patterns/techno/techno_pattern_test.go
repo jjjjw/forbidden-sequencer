@@ -7,7 +7,7 @@ import (
 )
 
 func TestTechnoPattern_FirstEventWithNegativeOffset(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(8, 120)
+	conductor := conductors.NewCommonTimeConductor(120, 8)
 	pattern := NewTechnoPattern(conductor)
 	pattern.Play()
 
@@ -23,7 +23,7 @@ func TestTechnoPattern_FirstEventWithNegativeOffset(t *testing.T) {
 }
 
 func TestTechnoPattern_AlternatesKickAndHihat(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(8, 120)
+	conductor := conductors.NewCommonTimeConductor(120, 8)
 	pattern := NewTechnoPattern(conductor)
 	pattern.Play()
 
@@ -47,7 +47,7 @@ func TestTechnoPattern_AlternatesKickAndHihat(t *testing.T) {
 }
 
 func TestTechnoPattern_Reset(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(8, 120)
+	conductor := conductors.NewCommonTimeConductor(120, 8)
 	pattern := NewTechnoPattern(conductor)
 	pattern.Play()
 

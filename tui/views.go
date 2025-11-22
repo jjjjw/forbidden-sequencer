@@ -79,13 +79,6 @@ func (m Model) viewMain() string {
 func (m Model) viewEventLog() string {
 	var indicators []string
 
-	// Beat indicator
-	if m.BeatActive {
-		indicators = append(indicators, BeatActiveStyle.Render("beat"))
-	} else {
-		indicators = append(indicators, BeatInactiveStyle.Render("beat"))
-	}
-
 	// Event indicators
 	eventTypes := []string{"kick", "hihat"}
 	for _, eventType := range eventTypes {

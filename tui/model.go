@@ -52,7 +52,6 @@ type Model struct {
 	// Event display
 	EventChan    chan events.ScheduledEvent
 	ActiveEvents map[string]bool // tracks which events are currently "lit"
-	BeatActive   bool            // tracks if beat indicator is lit
 }
 
 // ChannelMapping represents a MIDI channel assignment

@@ -72,12 +72,6 @@ func main() {
 				p.Send(tui.EventMsg(event))
 			}
 		}()
-		// Forward beats
-		go func() {
-			for beat := range m.Sequencer.GetBeatsChannel() {
-				p.Send(tui.BeatMsg(beat))
-			}
-		}()
 	}
 
 	if _, err := p.Run(); err != nil {

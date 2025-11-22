@@ -8,9 +8,6 @@ type TickCallback func(tick int64)
 // Conductor is a minimal tick-based clock interface
 // Implementations may add domain-specific time concepts (e.g., beats, measures)
 type Conductor interface {
-	// GetCurrentTick returns the current tick number
-	GetCurrentTick() int64
-
 	// GetTickDuration returns the duration of a single tick
 	GetTickDuration() time.Duration
 
@@ -18,5 +15,5 @@ type Conductor interface {
 	Start()
 
 	// GetBeatsChannel returns the channel for beat events
-	GetBeatsChannel() chan int64
+	GetBeatsChannel() chan struct{}
 }

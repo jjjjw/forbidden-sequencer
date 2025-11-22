@@ -129,6 +129,6 @@ func (s *Sequencer) GetEventsChannel() chan events.ScheduledEvent {
 }
 
 // GetBeatsChannel returns the conductor's beats channel
-func (s *Sequencer) GetBeatsChannel() chan int64 {
+func (s *Sequencer) GetBeatsChannel() chan struct{} {
 	return s.conductor.GetBeatsChannel()
 }
