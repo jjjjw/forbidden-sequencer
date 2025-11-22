@@ -36,7 +36,7 @@ func (m Model) viewMain() string {
 	}
 
 	// Status
-	status := StoppedStyle.Render("STOPPED")
+	status := StoppedStyle.Render("MUTED")
 	if m.IsPlaying {
 		status = PlayingStyle.Render("PLAYING")
 	}
@@ -72,7 +72,7 @@ func (m Model) viewMain() string {
 
 	// Help
 	help := []string{
-		"[space/p] Play/Stop",
+		"[space/p] Play/Mute",
 		"[r] Reset",
 		"[j/k] Rate -/+",
 		"[s] Settings",

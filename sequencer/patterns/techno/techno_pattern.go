@@ -81,7 +81,8 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 			Event: events.Event{
 				Name: "kick",
 				Type: events.EventTypeNote,
-				A:    0.8, // velocity
+				A:    36,  // MIDI note number
+				B:    0.8, // velocity
 			},
 			Timing: events.Timing{
 				Delta:    timeDelta,
@@ -94,7 +95,8 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 			Event: events.Event{
 				Name: "hihat",
 				Type: events.EventTypeNote,
-				A:    0.6, // velocity
+				A:    42,  // MIDI note number
+				B:    0.6, // velocity
 			},
 			Timing: events.Timing{
 				Delta:    timeDelta,

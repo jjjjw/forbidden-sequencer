@@ -3,6 +3,7 @@ package adapters
 import (
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"forbidden_sequencer/sequencer/events"
@@ -19,6 +20,7 @@ type MIDIAdapter struct {
 	channelMapping map[string]uint8 // maps event names to MIDI channels
 	driver         *rtmididrv.Driver
 	currentPort    int
+	mu             sync.Mutex // protects send operations
 }
 
 // MIDIPortInfo represents information about a MIDI output port
@@ -181,12 +183,12 @@ func (m *MIDIAdapter) Send(scheduled events.ScheduledEvent) error {
 	return nil
 }
 
-// sendNote converts frequency to MIDI note and sends note on/off
+// sendNote sends MIDI note on/off
 func (m *MIDIAdapter) sendNote(scheduled events.ScheduledEvent) error {
 	event := scheduled.Event
 	timing := scheduled.Timing
-	// Convert frequency to MIDI note number
-	midiNote := frequencyToMIDI(event.A)
+	// A is MIDI note number directly for EventTypeNote
+	midiNote := uint8(event.A)
 
 	// Convert normalized velocity (0.0-1.0) to MIDI velocity (0-127)
 	velocity := uint8(event.B * 127.0)
@@ -195,14 +197,21 @@ func (m *MIDIAdapter) sendNote(scheduled events.ScheduledEvent) error {
 	channel := m.GetChannelMapping(event.Name)
 
 	// Send note on
-	if err := m.send(midi.NoteOn(channel, midiNote, velocity)); err != nil {
+	m.mu.Lock()
+	err := m.send(midi.NoteOn(channel, midiNote, velocity))
+	time.Sleep(100 * time.Microsecond) // small delay for MIDI driver
+	m.mu.Unlock()
+	if err != nil {
 		return fmt.Errorf("failed to send note on: %w", err)
 	}
 
 	// Schedule note off after duration
 	if timing.Duration > 0 {
 		time.AfterFunc(timing.Duration, func() {
+			m.mu.Lock()
 			m.send(midi.NoteOff(channel, midiNote))
+			time.Sleep(100 * time.Microsecond)
+			m.mu.Unlock()
 		})
 	}
 
@@ -219,7 +228,11 @@ func (m *MIDIAdapter) sendCC(scheduled events.ScheduledEvent) error {
 	// Get channel from mapping
 	channel := m.GetChannelMapping(event.Name)
 
-	if err := m.send(midi.ControlChange(channel, ccNum, ccValue)); err != nil {
+	m.mu.Lock()
+	err := m.send(midi.ControlChange(channel, ccNum, ccValue))
+	time.Sleep(100 * time.Microsecond)
+	m.mu.Unlock()
+	if err != nil {
 		return fmt.Errorf("failed to send CC: %w", err)
 	}
 
@@ -241,6 +254,8 @@ func (m *MIDIAdapter) allNotesOff() {
 	if m.send == nil {
 		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	// Send NoteOff for all 128 notes on each channel in use
 	for _, channel := range m.channelMapping {
 		for note := uint8(0); note < 128; note++ {

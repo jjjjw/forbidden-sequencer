@@ -11,6 +11,7 @@ import (
 type GatedPattern struct {
 	conductor *conductors.ModulatedConductor
 	name      string  // event name (e.g., "kick", "hihat")
+	note      uint8   // MIDI note number
 	velocity  float64 // event velocity
 	startTick int     // first tick in phrase when pattern fires (inclusive)
 	endTick   int     // last tick in phrase when pattern fires (exclusive)
@@ -23,6 +24,7 @@ type GatedPattern struct {
 func NewGatedPattern(
 	conductor *conductors.ModulatedConductor,
 	name string,
+	note uint8,
 	velocity float64,
 	startTick int,
 	endTick int,
@@ -30,6 +32,7 @@ func NewGatedPattern(
 	return &GatedPattern{
 		conductor: conductor,
 		name:      name,
+		note:      note,
 		velocity:  velocity,
 		startTick: startTick,
 		endTick:   endTick,
@@ -79,16 +82,19 @@ func (g *GatedPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 	inRange := nextTickInPhrase >= g.startTick && nextTickInPhrase < g.endTick
 
 	if inRange {
-		// Fire event
+		// Fire event with duration = 75% of tick
+		tickDuration := g.conductor.GetTickDuration()
+		noteDuration := time.Duration(float64(tickDuration) * 0.75)
 		return events.ScheduledEvent{
 			Event: events.Event{
 				Name: g.name,
 				Type: events.EventTypeNote,
-				A:    float32(g.velocity),
+				A:    float32(g.note),
+				B:    float32(g.velocity),
 			},
 			Timing: events.Timing{
 				Delta:    delta,
-				Duration: 50 * time.Millisecond,
+				Duration: noteDuration,
 			},
 		}, nil
 	}

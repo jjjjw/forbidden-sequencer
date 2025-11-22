@@ -26,6 +26,7 @@ func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength in
 	kickPattern := modulated.NewGatedPattern(
 		conductor,
 		"kick",
+		36,            // MIDI note (bass drum)
 		0.8,           // velocity
 		0,             // startTick
 		phraseLength*3/4, // endTick (first 75% of phrase)
@@ -34,6 +35,7 @@ func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength in
 	syncedPattern := modulated.NewGatedPattern(
 		conductor,
 		"hihat",
+		42,               // MIDI note (closed hihat)
 		0.6,              // velocity
 		phraseLength/4,   // startTick (starts at 25%)
 		phraseLength*3/4, // endTick (ends at 75%)
