@@ -31,6 +31,10 @@ type Model struct {
 	Screen      Screen
 	Err         error
 
+	// Rate control
+	RateChanges chan float64 // channel to send rate changes to conductor
+	CurrentRate float64      // current rate multiplier for display
+
 	// MIDI port selection
 	MidiPorts    []adapters.MIDIPortInfo
 	SelectedPort int

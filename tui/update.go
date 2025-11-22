@@ -116,6 +116,29 @@ func (m Model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Go to settings
 		m.SelectedSetting = 0
 		m.Screen = ScreenSettings
+
+	case "up", "k":
+		// Increase rate
+		if m.RateChanges != nil {
+			m.CurrentRate *= 1.1
+			select {
+			case m.RateChanges <- m.CurrentRate:
+			default:
+			}
+		}
+
+	case "down", "j":
+		// Decrease rate
+		if m.RateChanges != nil {
+			m.CurrentRate /= 1.1
+			if m.CurrentRate < 0.1 {
+				m.CurrentRate = 0.1
+			}
+			select {
+			case m.RateChanges <- m.CurrentRate:
+			default:
+			}
+		}
 	}
 
 	return m, nil

@@ -60,6 +60,12 @@ func (m Model) viewMain() string {
 		b.WriteString("\n\n")
 	}
 
+	// Rate display
+	if m.RateChanges != nil {
+		b.WriteString(StatusStyle.Render(fmt.Sprintf("Rate: %.2fx", m.CurrentRate)))
+		b.WriteString("\n\n")
+	}
+
 	// Event log
 	b.WriteString(m.viewEventLog())
 	b.WriteString("\n\n")
@@ -68,6 +74,7 @@ func (m Model) viewMain() string {
 	help := []string{
 		"[space/p] Play/Stop",
 		"[r] Reset",
+		"[j/k] Rate -/+",
 		"[s] Settings",
 		"[q] Quit",
 	}

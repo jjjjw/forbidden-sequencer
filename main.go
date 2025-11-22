@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"forbidden_sequencer/sequencer/adapters"
 	"forbidden_sequencer/sequencer/sequencers"
@@ -42,8 +43,12 @@ func initialModel() tui.Model {
 		midiAdapter.SetChannelMapping(eventName, channel)
 	}
 
-	// Create techno sequencer (120 BPM, 8 ticks per beat = 32nd notes)
-	m.Sequencer = sequencers.NewTechnoSequencer(120, midiAdapter, false)
+	// Create modulated rhythm sequencer
+	// baseTickDuration: 100ms, phraseLength: 16 ticks
+	sequencer, conductor := sequencers.NewModulatedRhythmSequencer(100*time.Millisecond, 16, midiAdapter, false)
+	m.Sequencer = sequencer
+	m.RateChanges = conductor.RateChanges
+	m.CurrentRate = 1.0
 
 	// Initialize sequencer (starts paused)
 	m.Sequencer.Start()
