@@ -11,7 +11,8 @@ type ModulatedConductor struct {
 	phraseLength     int     // length of phrase in ticks
 	tickInPhrase     int     // current tick within the phrase (0 to phraseLength-1)
 	lastTickTime     time.Time
-	RateChanges      chan float64 // channel for rate multiplier updates
+	rateChanges      chan float64  // channel for rate multiplier updates
+	ticks            chan struct{} // channel for tick events
 }
 
 // NewModulatedConductor creates a new modulated conductor
@@ -23,8 +24,14 @@ func NewModulatedConductor(baseTickDuration time.Duration, phraseLength int) *Mo
 		rateMultiplier:   1.0,
 		phraseLength:     phraseLength,
 		tickInPhrase:     0,
-		RateChanges:      make(chan float64, 10),
+		rateChanges:      make(chan float64, 10),
+		ticks:            make(chan struct{}, 100),
 	}
+}
+
+// RateChanges returns the channel for sending rate multiplier updates
+func (c *ModulatedConductor) RateChanges() chan<- float64 {
+	return c.rateChanges
 }
 
 // GetTickDuration returns the current tick duration (base * 1/rate)
@@ -45,11 +52,6 @@ func (c *ModulatedConductor) GetRateMultiplier() float64 {
 // GetPhraseLength returns the phrase length in ticks
 func (c *ModulatedConductor) GetPhraseLength() int {
 	return c.phraseLength
-}
-
-// GetTickInPhrase returns the current tick position within the phrase
-func (c *ModulatedConductor) GetTickInPhrase() int {
-	return c.tickInPhrase
 }
 
 // GetNextTickInPhrase returns the next tick position within the phrase
@@ -97,7 +99,7 @@ func (c *ModulatedConductor) scheduleNextTick() {
 func (c *ModulatedConductor) processRateChanges() {
 	for {
 		select {
-		case newRate := <-c.RateChanges:
+		case newRate := <-c.rateChanges:
 			if newRate > 0 {
 				c.rateMultiplier = newRate
 			}
@@ -116,9 +118,18 @@ func (c *ModulatedConductor) advanceTick() {
 	if c.tickInPhrase >= c.phraseLength {
 		c.tickInPhrase = 0
 	}
+
+	// Send tick notification
+	if c.ticks != nil {
+		select {
+		case c.ticks <- struct{}{}:
+		default:
+			// Don't block if channel is full
+		}
+	}
 }
 
-// GetBeatsChannel returns nil - this conductor doesn't use beat events
-func (c *ModulatedConductor) GetBeatsChannel() chan struct{} {
-	return nil
+// Ticks returns the channel for tick events
+func (c *ModulatedConductor) Ticks() <-chan struct{} {
+	return c.ticks
 }

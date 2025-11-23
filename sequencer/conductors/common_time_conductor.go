@@ -12,7 +12,7 @@ type CommonTimeConductor struct {
 	lastBeatTime time.Time // time of the last beat
 	lastTickTime time.Time // time of the last tick
 	tickInBeat   int       // current tick within the beat (0 to ticksPerBeat-1)
-	Beats        chan struct{}
+	ticks        chan struct{}
 }
 
 // NewCommonTimeConductor creates a new common time conductor
@@ -23,7 +23,7 @@ func NewCommonTimeConductor(bpm float64, ticksPerBeat int) *CommonTimeConductor 
 		ticksPerBeat: ticksPerBeat,
 		bpm:          bpm,
 		tickInBeat:   0,
-		Beats:        make(chan struct{}, 100),
+		ticks:        make(chan struct{}, 100),
 	}
 	c.updateTickDuration()
 	return c
@@ -88,21 +88,21 @@ func (c *CommonTimeConductor) AdvanceTick() {
 	if c.tickInBeat >= c.ticksPerBeat {
 		c.tickInBeat = 0
 		c.lastBeatTime = c.lastTickTime
+	}
 
-		// Send beat notification
-		if c.Beats != nil {
-			select {
-			case c.Beats <- struct{}{}:
-			default:
-				// Don't block if channel is full
-			}
+	// Send tick notification
+	if c.ticks != nil {
+		select {
+		case c.ticks <- struct{}{}:
+		default:
+			// Don't block if channel is full
 		}
 	}
 }
 
-// GetBeatsChannel returns the channel for beat events
-func (c *CommonTimeConductor) GetBeatsChannel() chan struct{} {
-	return c.Beats
+// Ticks returns the channel for tick events
+func (c *CommonTimeConductor) Ticks() <-chan struct{} {
+	return c.ticks
 }
 
 // GetLastBeatTime returns the time of the last beat
@@ -115,7 +115,11 @@ func (c *CommonTimeConductor) GetLastTickTime() time.Time {
 	return c.lastTickTime
 }
 
-// GetTickInBeat returns the current tick position within the beat (0 to ticksPerBeat-1)
-func (c *CommonTimeConductor) GetTickInBeat() int {
-	return c.tickInBeat
+// GetNextTickInBeat returns the next tick position within the beat (0 to ticksPerBeat-1)
+func (c *CommonTimeConductor) GetNextTickInBeat() int {
+	next := c.tickInBeat + 1
+	if next >= c.ticksPerBeat {
+		return 0
+	}
+	return next
 }

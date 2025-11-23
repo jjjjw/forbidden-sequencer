@@ -7,10 +7,9 @@ import (
 	"forbidden_sequencer/sequencer/events"
 )
 
-// TechnoPattern generates alternating kick and hihat events
+// TechnoPattern generates kick and hihat events on beats
 type TechnoPattern struct {
 	conductor *conductors.CommonTimeConductor
-	isKick    bool // true = kick next, false = hihat next
 	paused    bool
 }
 
@@ -18,20 +17,18 @@ type TechnoPattern struct {
 func NewTechnoPattern(c *conductors.CommonTimeConductor) *TechnoPattern {
 	return &TechnoPattern{
 		conductor: c,
-		isKick:    true, // start with kick
 		paused:    true,
 	}
 }
 
-// Reset resets the pattern state to start with kick
+// Reset resets the pattern state
 func (t *TechnoPattern) Reset() {
-	t.isKick = true
+	// No state to reset
 }
 
 // Play resumes the pattern
 func (t *TechnoPattern) Play() {
 	t.paused = false
-	// t.isKick = true
 }
 
 // Stop pauses the pattern
@@ -39,43 +36,27 @@ func (t *TechnoPattern) Stop() {
 	t.paused = true
 }
 
-// GetNextScheduledEvent implements the Pattern interface
-func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
-	// When paused, return short rests
+// GetScheduledEventsForTick implements the Pattern interface
+func (t *TechnoPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDuration time.Duration) []events.ScheduledEvent {
+	// When paused, return no events
 	if t.paused {
-		return events.ScheduledEvent{
-			Event: events.Event{
-				Name: "rest",
-				Type: events.EventTypeRest,
-			},
-			Timing: events.Timing{
-				Timestamp: time.Now().Add(10 * time.Millisecond),
-				Duration:  0,
-			},
-		}, nil
+		return nil
 	}
 
-	tickDuration := t.conductor.GetTickDuration()
+	// Only schedule on beat boundaries (next tick is 0 in beat)
+	nextTickInBeat := t.conductor.GetNextTickInBeat()
+	if nextTickInBeat != 0 {
+		return nil
+	}
+
+	// Calculate half beat duration for hihat offset
 	ticksPerBeat := t.conductor.GetTicksPerBeat()
-	beatDuration := tickDuration * time.Duration(ticksPerBeat)
-	halfBeatDuration := beatDuration / 2
+	halfBeatDuration := tickDuration * time.Duration(ticksPerBeat) / 2
 
-	// Get next beat time from conductor
-	nextBeatTime := t.conductor.GetNextBeatTime()
-
-	var nextFireTime time.Time
-	if t.isKick {
-		// Kick fires on next beat boundary
-		nextFireTime = nextBeatTime
-	} else {
-		// Hihat fires half a beat before the next beat (i.e., half beat after last kick)
-		nextFireTime = nextBeatTime.Add(-halfBeatDuration)
-	}
-
-	var event events.ScheduledEvent
-	if t.isKick {
-		// Create kick event (MIDI note 36 = bass drum)
-		event = events.ScheduledEvent{
+	// Schedule both kick and hihat for this beat
+	return []events.ScheduledEvent{
+		{
+			// Kick on the beat
 			Event: events.Event{
 				Name: "kick",
 				Type: events.EventTypeNote,
@@ -83,13 +64,12 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 				B:    0.8, // velocity
 			},
 			Timing: events.Timing{
-				Timestamp: nextFireTime,
+				Timestamp: nextTickTime,
 				Duration:  100 * time.Millisecond,
 			},
-		}
-	} else {
-		// Create hihat event (MIDI note 42 = closed hihat)
-		event = events.ScheduledEvent{
+		},
+		{
+			// Hihat on the offbeat
 			Event: events.Event{
 				Name: "hihat",
 				Type: events.EventTypeNote,
@@ -97,14 +77,9 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 				B:    0.6, // velocity
 			},
 			Timing: events.Timing{
-				Timestamp: nextFireTime,
+				Timestamp: nextTickTime.Add(halfBeatDuration),
 				Duration:  50 * time.Millisecond,
 			},
-		}
+		},
 	}
-
-	// Toggle for next call
-	t.isKick = !t.isKick
-
-	return event, nil
 }

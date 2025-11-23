@@ -11,27 +11,31 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 - `ScheduledEvent`: Event + Timing (wait + duration)
 - Example: frequency in Hz (not MIDI notes)
 
-**Pattern** - Stateful event generator
-- Interface: `GetNextScheduledEvent()`, `Reset()`, `Play()`, `Stop()`
+**Pattern** - Tick-driven event generator
+- Interface: `GetScheduledEventsForTick(nextTickTime, tickDuration)`, `Reset()`, `Play()`, `Stop()`
 - Receives Conductor reference at construction time
-- Returns ScheduledEvents with Delta calculated from conductor's tick state
-- Maintains internal state (isKick, lastBeatTick, paused)
-- When paused, returns short rests (10ms)
-- When playing, calculates next event timing from conductor
+- Called once per tick by sequencer
+- **Always schedules ahead**: patterns schedule events from `nextTickTime` forward, never for "now"
+- Queries conductor for next tick state (`GetNextTickInBeat()`, `GetNextTickInPhrase()`)
+- When paused, returns nil (no events)
+- When playing, returns events for the next tick period
 
 **Conductor** - Tick-based master clock
-- Minimal interface: `GetCurrentTick()`, `GetTickDuration()`, `Start()`, `GetBeatsChannel()`
+- Minimal interface: `GetTickDuration()`, `Start()`, `Ticks()`
 - Runs continuously once started, advancing ticks at precise intervals
+- Emits on `Ticks()` channel when each tick fires
 - Uses absolute wall-clock time for drift-free scheduling
 - `CommonTimeConductor` adds beat-awareness (ticksPerBeat, BPM)
-- `GetNextBeatTick()` returns next beat boundary tick
-- `GetAbsoluteTimeForTick()` converts tick to wall-clock time
-- Beats channel sends beat events to TUI
+  - `GetNextTickInBeat()` returns the next tick position (0 to ticksPerBeat-1)
+  - `GetNextTickTime()` returns absolute time of next tick
+- `ModulatedConductor` adds phrase tracking (phraseLength, variable rate)
+  - `GetNextTickInPhrase()` returns the next tick position in phrase
 - Patterns query conductor but cannot mutate it (read-only)
 
 **Sequencer** - Pattern orchestration
 - Manages pattern list and conductor lifecycle
-- Starts conductor and schedules pattern events
+- Listens for conductor ticks and calls patterns on each tick
+- Schedules returned events using `time.AfterFunc`
 - Delegates Play/Stop/Reset to patterns
 - Events channel for sending scheduled events to TUI
 
@@ -47,13 +51,15 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 ### System Flow
 
 **Goroutines:**
-1. **Conductor loop:** Advances ticks using absolute time scheduling
-2. **Pattern scheduling:** Sequencer schedules each pattern's events via AfterFunc
+1. **Conductor loop:** Advances ticks using absolute time scheduling, emits on Ticks channel
+2. **Sequencer tick loop:** Listens for ticks, calls patterns, schedules returned events via AfterFunc
 3. **Adapter goroutines:** Handle MIDI note on/off timing
 
 **Key properties:**
-- Conductor runs continuously, patterns handle their own pause state
-- Patterns return rests when paused, events when playing
+- Conductor drives timing, patterns respond to ticks
+- Patterns always schedule ahead (never for "now")
+- Patterns return nil when paused, events when playing
+- No deduplication needed - each pattern called exactly once per tick
 - No shared mutable state between patterns (conductor is read-only)
 
 ### Concrete Example: Techno Sequencer
@@ -68,9 +74,9 @@ sequencer.Play()
 ```
 
 **Techno pattern logic:**
-- Alternates kick and hihat using internal state
-- Uses `GetNextBeatTick()` to schedule kicks on beat boundaries
-- Schedules hihats half a beat after each kick
+- Checks `GetNextTickInBeat()` - if next tick is 0 (beat boundary), schedule events
+- Returns both kick (at nextTickTime) and hihat (at nextTickTime + halfBeat)
+- No internal state needed - pattern is a pure function of conductor state
 
 **Result:** "boom tick boom tick" techno beat at 120 BPM
 
@@ -83,13 +89,6 @@ sequencer.Play()
 - [x] Create Techno sequencer factory
 - [x] Implement drift-free absolute time scheduling
 - [x] Implement Play/Stop/Reset controls
-- [ ] Add coordination primitives to Conductor (scratch space for pattern communication)
-- [ ] Example: Kick Mutes Bass pattern coordination
-  - Kick pattern writes to Conductor scratch space when it fires
-  - Bass pattern checks Conductor for kicks on current beat
-  - If kick present, bass returns empty (mute)
-  - Result: Bass automatically mutes when kick plays, no direct coupling
-- [ ] Build Controller for frontend parameter mapping
 - [ ] Build pattern library (LogarithmicTiming, ClusterStructure, VelocityCurve)
 
 ## Development

@@ -14,6 +14,6 @@ type Conductor interface {
 	// Start begins ticking (runs continuously once started)
 	Start()
 
-	// GetBeatsChannel returns the channel for beat events
-	GetBeatsChannel() chan struct{}
+	// Ticks returns a channel that emits on each tick
+	Ticks() <-chan struct{}
 }

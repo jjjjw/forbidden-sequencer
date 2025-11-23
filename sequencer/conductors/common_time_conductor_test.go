@@ -8,30 +8,30 @@ import (
 func TestCommonTimeConductor_TickAdvancement(t *testing.T) {
 	c := NewCommonTimeConductor(120, 4) // 120 BPM, 4 ticks/beat
 
-	// Initial tick should be 0
-	if c.GetTickInBeat() != 0 {
-		t.Errorf("Expected initial tick in beat to be 0, got %d", c.GetTickInBeat())
-	}
-
 	// Start conductor to initialize times
 	c.Start()
 
-	// Advance ticks manually
-	c.AdvanceTick()
-	if c.GetTickInBeat() != 1 {
-		t.Errorf("Expected tick in beat to be 1 after advance, got %d", c.GetTickInBeat())
+	// Initial state: current tick is 0, so next tick in beat should be 1
+	if c.GetNextTickInBeat() != 1 {
+		t.Errorf("Expected next tick in beat to be 1, got %d", c.GetNextTickInBeat())
 	}
 
-	c.AdvanceTick()
-	c.AdvanceTick()
-	if c.GetTickInBeat() != 3 {
-		t.Errorf("Expected tick in beat to be 3 after 3 advances, got %d", c.GetTickInBeat())
+	// Advance ticks manually
+	c.AdvanceTick() // now at tick 1, next is 2
+	if c.GetNextTickInBeat() != 2 {
+		t.Errorf("Expected next tick in beat to be 2 after advance, got %d", c.GetNextTickInBeat())
+	}
+
+	c.AdvanceTick() // now at tick 2, next is 3
+	c.AdvanceTick() // now at tick 3, next is 0 (wraps)
+	if c.GetNextTickInBeat() != 0 {
+		t.Errorf("Expected next tick in beat to be 0 after 3 advances, got %d", c.GetNextTickInBeat())
 	}
 
 	// Advance one more to complete the beat
-	c.AdvanceTick()
-	if c.GetTickInBeat() != 0 {
-		t.Errorf("Expected tick in beat to wrap to 0, got %d", c.GetTickInBeat())
+	c.AdvanceTick() // now at tick 0, next is 1
+	if c.GetNextTickInBeat() != 1 {
+		t.Errorf("Expected next tick in beat to be 1, got %d", c.GetNextTickInBeat())
 	}
 }
 
@@ -85,40 +85,31 @@ func TestCommonTimeConductor_Start(t *testing.T) {
 	c.Start()
 
 	// Wait a bit for ticks to advance
-	time.Sleep(300 * time.Millisecond) // Should advance ~2 ticks at 125ms/tick
+	// At 120 BPM with 4 ticks/beat: tick duration = 125ms
+	time.Sleep(200 * time.Millisecond) // Should advance ~1-2 ticks
 
-	// Check that beats channel received notifications
-	// At 120 BPM, 4 ticks/beat = 500ms per beat
-	// In 300ms we won't complete a beat yet
-
-	// Wait longer to complete at least one beat
-	time.Sleep(300 * time.Millisecond)
-
-	// Check if we received a beat notification
+	// Check if we received tick notifications
 	select {
-	case <-c.Beats:
-		// Good, received a beat
+	case <-c.Ticks():
+		// Good, received a tick
 	default:
-		t.Error("Expected to receive at least one beat notification")
+		t.Error("Expected to receive at least one tick notification")
 	}
 }
 
-func TestCommonTimeConductor_BeatNotification(t *testing.T) {
+func TestCommonTimeConductor_TickNotification(t *testing.T) {
 	c := NewCommonTimeConductor(120, 4) // 120 BPM, 4 ticks/beat
 
 	c.Start()
 
-	// Manually advance 4 ticks to trigger a beat
-	c.AdvanceTick()
-	c.AdvanceTick()
-	c.AdvanceTick()
+	// Manually advance a tick
 	c.AdvanceTick()
 
-	// Should have received a beat notification
+	// Should have received a tick notification
 	select {
-	case <-c.Beats:
+	case <-c.Ticks():
 		// Good
 	default:
-		t.Error("Expected beat notification after 4 ticks")
+		t.Error("Expected tick notification after advance")
 	}
 }

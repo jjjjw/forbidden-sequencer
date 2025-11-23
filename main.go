@@ -47,7 +47,7 @@ func initialModel() tui.Model {
 	// baseTickDuration: 100ms, phraseLength: 16 ticks
 	sequencer, conductor := sequencers.NewModulatedRhythmSequencer(100*time.Millisecond, 16, midiAdapter, false)
 	m.Sequencer = sequencer
-	m.RateChanges = conductor.RateChanges
+	m.RateChanges = conductor.RateChanges()
 	m.CurrentRate = 1.0
 
 	// Initialize sequencer (starts paused)
