@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 )
 
 // View returns the current screen view
@@ -30,6 +31,12 @@ func (m Model) viewMain() string {
 	left.WriteString(TitleStyle.Render("Forbidden Sequencer"))
 	left.WriteString("\n\n")
 
+	// Sequencer info
+	if m.Sequencer != nil {
+		left.WriteString(StatusStyle.Render(fmt.Sprintf("%v", m.Sequencer)))
+		left.WriteString("\n\n")
+	}
+
 	// Error display
 	if m.Err != nil {
 		left.WriteString(ErrorStyle.Render(fmt.Sprintf("Error: %v", m.Err)))
@@ -45,21 +52,6 @@ func (m Model) viewMain() string {
 	left.WriteString(status)
 	left.WriteString("\n\n")
 
-	// Current MIDI port
-	if m.MidiAdapter != nil {
-		portName := "Unknown"
-		ports, err := m.MidiAdapter.ListAvailablePorts()
-		if err == nil {
-			for _, p := range ports {
-				if p.Index == m.MidiAdapter.GetCurrentPort() {
-					portName = p.Name
-					break
-				}
-			}
-		}
-		left.WriteString(StatusStyle.Render(fmt.Sprintf("MIDI Port: %s", portName)))
-		left.WriteString("\n\n")
-	}
 
 	// Rate display
 	if m.RateChanges != nil {
@@ -85,12 +77,8 @@ func (m Model) viewMain() string {
 }
 
 func (m Model) viewEventLog() string {
-	if len(m.EventLog) == 0 {
-		return EventLogStyle.Render("No events yet")
-	}
-
-	var lines []string
-	// Show up to 30 most recent events (they're already newest first)
+	// Build rows
+	var rows [][]string
 	limit := 30
 	if len(m.EventLog) < limit {
 		limit = len(m.EventLog)
@@ -99,11 +87,31 @@ func (m Model) viewEventLog() string {
 	for i := 0; i < limit; i++ {
 		entry := m.EventLog[i]
 		timestamp := entry.Timestamp.Format("15:04:05.000")
-		line := fmt.Sprintf("%s  %s", timestamp, entry.Name)
-		lines = append(lines, line)
+		rows = append(rows, []string{timestamp, entry.Name})
 	}
 
-	return EventLogStyle.Render(strings.Join(lines, "\n"))
+	// Create table
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("241"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			style := lipgloss.NewStyle().Padding(0, 1)
+			if row == table.HeaderRow {
+				style = style.Bold(true)
+			}
+			// Set min widths
+			switch col {
+			case 0: // Time
+				style = style.Width(14)
+			case 1: // Event
+				style = style.Width(10)
+			}
+			return style
+		}).
+		Headers("Time", "Event").
+		Rows(rows...)
+
+	return t.String()
 }
 
 func (m Model) viewSettings() string {

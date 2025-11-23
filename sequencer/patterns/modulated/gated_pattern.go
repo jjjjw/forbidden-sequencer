@@ -1,6 +1,7 @@
 package modulated
 
 import (
+	"fmt"
 	"time"
 
 	"forbidden_sequencer/sequencer/conductors"
@@ -53,6 +54,11 @@ func (g *GatedPattern) Play() {
 // Stop pauses the pattern
 func (g *GatedPattern) Stop() {
 	g.paused = true
+}
+
+// String returns a string representation of the pattern
+func (g *GatedPattern) String() string {
+	return fmt.Sprintf("%s (ticks %d-%d)", g.name, g.startTick, g.endTick)
 }
 
 // GetScheduledEventsForTick implements the Pattern interface

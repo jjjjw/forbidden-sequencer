@@ -109,7 +109,6 @@ func (s *Sequencer) Reset() {
 	}
 }
 
-
 // handleError handles errors based on debug mode
 func (s *Sequencer) handleError(msg string) {
 	if s.debug {
@@ -127,3 +126,11 @@ func (s *Sequencer) GetEventsChannel() chan events.ScheduledEvent {
 	return s.Events
 }
 
+// String returns a string representation of the sequencer
+func (s *Sequencer) String() string {
+	var patternStrs []string
+	for _, p := range s.patterns {
+		patternStrs = append(patternStrs, fmt.Sprintf("%v", p))
+	}
+	return fmt.Sprintf("Patterns: %v", patternStrs)
+}
