@@ -13,9 +13,9 @@ import (
 // phraseLength: number of ticks in one phrase
 // adapter: MIDI or other output adapter
 // debug: debug mode flag
-func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength int, adapter adapters.EventAdapter, debug bool) (*Sequencer, *conductors.ModulatedConductor) {
+func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength int, adapter adapters.EventAdapter, debug bool) (*Sequencer, *conductors.PhraseConductor) {
 	// Create modulated conductor
-	conductor := conductors.NewModulatedConductor(baseTickDuration, phraseLength)
+	conductor := conductors.NewPhraseConductor(baseTickDuration, phraseLength)
 
 	// Create patterns with overlapping ranges
 	// Example: 16 tick phrase

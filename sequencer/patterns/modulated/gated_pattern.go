@@ -10,7 +10,7 @@ import (
 
 // GatedPattern fires events only when within a specified tick range of the phrase
 type GatedPattern struct {
-	conductor *conductors.ModulatedConductor
+	conductor *conductors.PhraseConductor
 	name      string  // event name (e.g., "kick", "hihat")
 	note      uint8   // MIDI note number
 	velocity  float64 // event velocity
@@ -23,7 +23,7 @@ type GatedPattern struct {
 // startTick: first tick to fire (inclusive)
 // endTick: last tick to fire (exclusive)
 func NewGatedPattern(
-	conductor *conductors.ModulatedConductor,
+	conductor *conductors.PhraseConductor,
 	name string,
 	note uint8,
 	velocity float64,

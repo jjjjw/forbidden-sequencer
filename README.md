@@ -8,8 +8,7 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 
 **Events** - Protocol-agnostic musical data
 - `Event`: name, type, a, b, c, d (float32 parameters)
-- `ScheduledEvent`: Event + Timing (wait + duration)
-- Example: frequency in Hz (not MIDI notes)
+- `ScheduledEvent`: Event + Timing (timestamp + duration)
 
 **Pattern** - Tick-driven event generator
 - Interface: `GetScheduledEventsForTick(nextTickTime, tickDuration)`, `Reset()`, `Play()`, `Stop()`
@@ -28,7 +27,7 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 - `CommonTimeConductor` adds beat-awareness (ticksPerBeat, BPM)
   - `GetNextTickInBeat()` returns the next tick position (0 to ticksPerBeat-1)
   - `GetNextTickTime()` returns absolute time of next tick
-- `ModulatedConductor` adds phrase tracking (phraseLength, variable rate)
+- `PhraseConductor` adds phrase tracking (phraseLength, variable rate)
   - `GetNextTickInPhrase()` returns the next tick position in phrase
 - Patterns query conductor but cannot mutate it (read-only)
 
@@ -38,11 +37,6 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 - Schedules returned events using `time.AfterFunc`
 - Delegates Play/Stop/Reset to patterns
 - Events channel for sending scheduled events to TUI
-
-**Controller** - Frontend ↔ Backend bridge
-- Receives control changes from frontend
-- Maps controls to pattern parameters
-- One controller per sequencer
 
 **Adapters** - Protocol output
 - `MIDIAdapter`: Converts frequency → MIDI, handles timing in goroutines
@@ -59,7 +53,7 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 - Conductor drives timing, patterns respond to ticks
 - Patterns always schedule ahead (never for "now")
 - Patterns return nil when paused, events when playing
-- No deduplication needed - each pattern called exactly once per tick
+- Each pattern called exactly once per tick
 - No shared mutable state between patterns (conductor is read-only)
 
 ### Concrete Example: Techno Sequencer
@@ -145,32 +139,4 @@ Run tests for a specific package:
 ```bash
 go test ./sequencer/conductors -v
 go test ./sequencer/patterns/techno -v
-```
-
-## Project Structure
-
-```
-sequencer/
-├── events/
-│   └── event.go              # Event, Timing, ScheduledEvent types
-├── conductors/
-│   ├── conductor.go          # Conductor interface (minimal tick-based clock)
-│   └── common_time_conductor.go # Beat-aware implementation
-├── patterns/
-│   └── techno/
-│       └── techno_pattern.go # Alternating kick and hihat
-├── sequencers/
-│   ├── sequencer.go          # Pattern interface + orchestration
-│   └── techno.go             # Techno sequencer factory
-├── adapters/
-│   ├── adapter.go            # EventAdapter interface
-│   └── midi_adapter.go       # MIDI implementation
-├── lib/
-│   └── markov.go             # Markov chain engine
-├── event_generators/         # Currently unused
-│   ├── event_generator.go
-│   └── markov_generator.go
-└── timing_generators/        # Currently unused
-    ├── timing_generator.go
-    └── fixed_rate.go
 ```
