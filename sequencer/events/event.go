@@ -47,8 +47,8 @@ type Event struct {
 
 // Timing represents when and how long an event should play
 type Timing struct {
-	Delta    time.Duration // Time since previous event
-	Duration time.Duration // How long event lasts (could be different than the delta between events)
+	Timestamp time.Time // Absolute time of the event start
+	Duration  time.Duration // How long event lasts (could be different than the delta between events)
 }
 
 // ScheduledEvent pairs an Event with Timing information

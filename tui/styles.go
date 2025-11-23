@@ -41,18 +41,10 @@ var (
 			BorderForeground(lipgloss.Color("240")).
 			Padding(0, 1)
 
-	// Event indicator styles
-	EventInactiveStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("240")).
-				Padding(0, 1).
-				Width(10)
-
-	EventActiveStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("214")).
-				Foreground(lipgloss.Color("214")).
-				Bold(true).
-				Padding(0, 1).
-				Width(10)
+	// Event log style
+	EventLogStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Padding(0, 1).
+			Foreground(lipgloss.Color("252"))
 )

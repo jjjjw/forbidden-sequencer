@@ -49,8 +49,8 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 				Type: events.EventTypeRest,
 			},
 			Timing: events.Timing{
-				Delta:    10 * time.Millisecond,
-				Duration: 0,
+				Timestamp: time.Now().Add(10 * time.Millisecond),
+				Duration:  0,
 			},
 		}, nil
 	}
@@ -72,8 +72,6 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 		nextFireTime = nextBeatTime.Add(-halfBeatDuration)
 	}
 
-	timeDelta := time.Until(nextFireTime)
-
 	var event events.ScheduledEvent
 	if t.isKick {
 		// Create kick event (MIDI note 36 = bass drum)
@@ -85,8 +83,8 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 				B:    0.8, // velocity
 			},
 			Timing: events.Timing{
-				Delta:    timeDelta,
-				Duration: 100 * time.Millisecond,
+				Timestamp: nextFireTime,
+				Duration:  100 * time.Millisecond,
 			},
 		}
 	} else {
@@ -99,8 +97,8 @@ func (t *TechnoPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 				B:    0.6, // velocity
 			},
 			Timing: events.Timing{
-				Delta:    timeDelta,
-				Duration: 50 * time.Millisecond,
+				Timestamp: nextFireTime,
+				Duration:  50 * time.Millisecond,
 			},
 		}
 	}

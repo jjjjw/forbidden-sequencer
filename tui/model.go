@@ -1,10 +1,18 @@
 package tui
 
 import (
+	"time"
+
 	"forbidden_sequencer/sequencer/adapters"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/sequencers"
 )
+
+// EventLogEntry represents a single event in the event log
+type EventLogEntry struct {
+	Name      string
+	Timestamp time.Time
+}
 
 // Screen represents the current view
 type Screen int
@@ -54,8 +62,8 @@ type Model struct {
 	Height int
 
 	// Event display
-	EventChan    chan events.ScheduledEvent
-	ActiveEvents map[string]bool // tracks which events are currently "lit"
+	EventChan chan events.ScheduledEvent
+	EventLog  []EventLogEntry // stores last 100 events, newest first
 }
 
 // ChannelMapping represents a MIDI channel assignment

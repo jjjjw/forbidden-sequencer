@@ -40,8 +40,8 @@ func (m *mockPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 				Type: events.EventTypeRest,
 			},
 			Timing: events.Timing{
-				Delta:    10 * time.Millisecond,
-				Duration: 0,
+				Timestamp: time.Now().Add(10 * time.Millisecond),
+				Duration:  0,
 			},
 		}, nil
 	}
@@ -51,8 +51,8 @@ func (m *mockPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 		return events.ScheduledEvent{
 			Event: events.Event{Name: "done"},
 			Timing: events.Timing{
-				Delta:    10 * time.Second,
-				Duration: 0,
+				Timestamp: time.Now().Add(10 * time.Second),
+				Duration:  0,
 			},
 		}, nil
 	}
@@ -66,8 +66,8 @@ func (m *mockPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 			B:    0.5,
 		},
 		Timing: events.Timing{
-			Delta:    10 * time.Millisecond,
-			Duration: 50 * time.Millisecond,
+			Timestamp: time.Now().Add(10 * time.Millisecond),
+			Duration:  50 * time.Millisecond,
 		},
 	}, nil
 }

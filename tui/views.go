@@ -23,16 +23,17 @@ func (m Model) View() string {
 }
 
 func (m Model) viewMain() string {
-	var b strings.Builder
+	// Left panel - main content
+	var left strings.Builder
 
 	// Title
-	b.WriteString(TitleStyle.Render("Forbidden Sequencer"))
-	b.WriteString("\n\n")
+	left.WriteString(TitleStyle.Render("Forbidden Sequencer"))
+	left.WriteString("\n\n")
 
 	// Error display
 	if m.Err != nil {
-		b.WriteString(ErrorStyle.Render(fmt.Sprintf("Error: %v", m.Err)))
-		b.WriteString("\n\n")
+		left.WriteString(ErrorStyle.Render(fmt.Sprintf("Error: %v", m.Err)))
+		left.WriteString("\n\n")
 	}
 
 	// Status
@@ -40,9 +41,9 @@ func (m Model) viewMain() string {
 	if m.IsPlaying {
 		status = PlayingStyle.Render("PLAYING")
 	}
-	b.WriteString(StatusStyle.Render("Status: "))
-	b.WriteString(status)
-	b.WriteString("\n\n")
+	left.WriteString(StatusStyle.Render("Status: "))
+	left.WriteString(status)
+	left.WriteString("\n\n")
 
 	// Current MIDI port
 	if m.MidiAdapter != nil {
@@ -56,19 +57,15 @@ func (m Model) viewMain() string {
 				}
 			}
 		}
-		b.WriteString(StatusStyle.Render(fmt.Sprintf("MIDI Port: %s", portName)))
-		b.WriteString("\n\n")
+		left.WriteString(StatusStyle.Render(fmt.Sprintf("MIDI Port: %s", portName)))
+		left.WriteString("\n\n")
 	}
 
 	// Rate display
 	if m.RateChanges != nil {
-		b.WriteString(StatusStyle.Render(fmt.Sprintf("Rate: %.2fx", m.CurrentRate)))
-		b.WriteString("\n\n")
+		left.WriteString(StatusStyle.Render(fmt.Sprintf("Rate: %.2fx", m.CurrentRate)))
+		left.WriteString("\n\n")
 	}
-
-	// Event log
-	b.WriteString(m.viewEventLog())
-	b.WriteString("\n\n")
 
 	// Help
 	help := []string{
@@ -78,26 +75,35 @@ func (m Model) viewMain() string {
 		"[s] Settings",
 		"[q] Quit",
 	}
-	b.WriteString(BoxStyle.Render(HelpStyle.Render(strings.Join(help, "  "))))
+	left.WriteString(BoxStyle.Render(HelpStyle.Render(strings.Join(help, "  "))))
 
-	return b.String()
+	// Right panel - event log
+	right := m.viewEventLog()
+
+	// Join left and right panels
+	return lipgloss.JoinHorizontal(lipgloss.Top, left.String(), "  ", right)
 }
 
 func (m Model) viewEventLog() string {
-	var indicators []string
-
-	// Event indicators
-	eventTypes := []string{"kick", "hihat"}
-	for _, eventType := range eventTypes {
-		active := m.ActiveEvents != nil && m.ActiveEvents[eventType]
-		if active {
-			indicators = append(indicators, EventActiveStyle.Render(eventType))
-		} else {
-			indicators = append(indicators, EventInactiveStyle.Render(eventType))
-		}
+	if len(m.EventLog) == 0 {
+		return EventLogStyle.Render("No events yet")
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, indicators...)
+	var lines []string
+	// Show up to 30 most recent events (they're already newest first)
+	limit := 30
+	if len(m.EventLog) < limit {
+		limit = len(m.EventLog)
+	}
+
+	for i := 0; i < limit; i++ {
+		entry := m.EventLog[i]
+		timestamp := entry.Timestamp.Format("15:04:05.000")
+		line := fmt.Sprintf("%s  %s", timestamp, entry.Name)
+		lines = append(lines, line)
+	}
+
+	return EventLogStyle.Render(strings.Join(lines, "\n"))
 }
 
 func (m Model) viewSettings() string {

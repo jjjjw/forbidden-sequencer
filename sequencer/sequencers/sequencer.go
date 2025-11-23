@@ -85,8 +85,8 @@ func (s *Sequencer) scheduleNextEvent(index int) {
 		return
 	}
 
-	// Schedule the event to fire after Delta
-	time.AfterFunc(scheduled.Timing.Delta, func() {
+	// Schedule the event to fire at Timestamp
+	time.AfterFunc(time.Until(scheduled.Timing.Timestamp), func() {
 		// Send to adapter
 		if s.adapter != nil {
 			if s.debug {

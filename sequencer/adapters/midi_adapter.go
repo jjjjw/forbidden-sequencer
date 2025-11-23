@@ -3,7 +3,6 @@ package adapters
 import (
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"forbidden_sequencer/sequencer/events"
@@ -20,7 +19,6 @@ type MIDIAdapter struct {
 	channelMapping map[string]uint8 // maps event names to MIDI channels
 	driver         *rtmididrv.Driver
 	currentPort    int
-	mu             sync.Mutex // protects send operations
 }
 
 // MIDIPortInfo represents information about a MIDI output port
@@ -197,10 +195,7 @@ func (m *MIDIAdapter) sendNote(scheduled events.ScheduledEvent) error {
 	channel := m.GetChannelMapping(event.Name)
 
 	// Send note on
-	m.mu.Lock()
 	err := m.send(midi.NoteOn(channel, midiNote, velocity))
-	time.Sleep(100 * time.Microsecond) // small delay for MIDI driver
-	m.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("failed to send note on: %w", err)
 	}
@@ -208,10 +203,7 @@ func (m *MIDIAdapter) sendNote(scheduled events.ScheduledEvent) error {
 	// Schedule note off after duration
 	if timing.Duration > 0 {
 		time.AfterFunc(timing.Duration, func() {
-			m.mu.Lock()
 			m.send(midi.NoteOff(channel, midiNote))
-			time.Sleep(100 * time.Microsecond)
-			m.mu.Unlock()
 		})
 	}
 
@@ -228,10 +220,7 @@ func (m *MIDIAdapter) sendCC(scheduled events.ScheduledEvent) error {
 	// Get channel from mapping
 	channel := m.GetChannelMapping(event.Name)
 
-	m.mu.Lock()
 	err := m.send(midi.ControlChange(channel, ccNum, ccValue))
-	time.Sleep(100 * time.Microsecond)
-	m.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("failed to send CC: %w", err)
 	}
@@ -254,8 +243,6 @@ func (m *MIDIAdapter) allNotesOff() {
 	if m.send == nil {
 		return
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	// Send NoteOff for all 128 notes on each channel in use
 	for _, channel := range m.channelMapping {
 		for note := uint8(0); note < 128; note++ {

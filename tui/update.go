@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"time"
 
 	"forbidden_sequencer/sequencer/events"
 
@@ -11,9 +10,6 @@ import (
 
 // EventMsg is sent when an event is received from the sequencer
 type EventMsg events.ScheduledEvent
-
-// ClearEventMsg clears an event's active state
-type ClearEventMsg string
 
 // Init implements tea.Model
 func (m Model) Init() tea.Cmd {
@@ -29,29 +25,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case EventMsg:
-		// Set event as active
+		// Add event to log (skip rests)
 		event := events.ScheduledEvent(msg)
-		if m.ActiveEvents == nil {
-			m.ActiveEvents = make(map[string]bool)
-		}
-		if m.ActiveEvents[event.Event.Name] {
-			// Already active, ignore
+		if event.Event.Type == events.EventTypeRest {
 			return m, nil
 		}
-		m.ActiveEvents[event.Event.Name] = true
-		// Schedule clear after event duration
-		duration := event.Timing.Duration
-		if duration <= 0 {
-			duration = 50 * time.Millisecond // fallback
+		entry := EventLogEntry{
+			Name:      event.Event.Name,
+			Timestamp: event.Timing.Timestamp,
 		}
-		return m, tea.Tick(duration, func(t time.Time) tea.Msg {
-			return ClearEventMsg(event.Event.Name)
-		})
-
-	case ClearEventMsg:
-		// Clear event active state
-		if m.ActiveEvents != nil {
-			m.ActiveEvents[string(msg)] = false
+		// Prepend to keep newest first
+		m.EventLog = append([]EventLogEntry{entry}, m.EventLog...)
+		// Keep only last 100 events
+		if len(m.EventLog) > 100 {
+			m.EventLog = m.EventLog[:100]
 		}
 		return m, nil
 

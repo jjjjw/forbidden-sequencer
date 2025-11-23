@@ -9,13 +9,14 @@ import (
 
 // GatedPattern fires events only when within a specified tick range of the phrase
 type GatedPattern struct {
-	conductor *conductors.ModulatedConductor
-	name      string  // event name (e.g., "kick", "hihat")
-	note      uint8   // MIDI note number
-	velocity  float64 // event velocity
-	startTick int     // first tick in phrase when pattern fires (inclusive)
-	endTick   int     // last tick in phrase when pattern fires (exclusive)
-	paused    bool
+	conductor         *conductors.ModulatedConductor
+	name              string  // event name (e.g., "kick", "hihat")
+	note              uint8   // MIDI note number
+	velocity          float64 // event velocity
+	startTick         int     // first tick in phrase when pattern fires (inclusive)
+	endTick           int     // last tick in phrase when pattern fires (exclusive)
+	paused            bool
+	lastScheduledTime time.Time // tracks last scheduled event time to avoid duplicates
 }
 
 // NewGatedPattern creates a new gated pattern
@@ -65,8 +66,8 @@ func (g *GatedPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 				Type: events.EventTypeRest,
 			},
 			Timing: events.Timing{
-				Delta:    10 * time.Millisecond,
-				Duration: 0,
+				Timestamp: time.Now().Add(10 * time.Millisecond),
+				Duration:  0,
 			},
 		}, nil
 	}
@@ -75,8 +76,22 @@ func (g *GatedPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 	nextTickTime := g.conductor.GetNextTickTime()
 	nextTickInPhrase := g.conductor.GetNextTickInPhrase()
 
-	// Calculate delta to next tick
-	delta := time.Until(nextTickTime)
+	// If we've already scheduled this tick, return a short rest
+	if !g.lastScheduledTime.IsZero() && !nextTickTime.After(g.lastScheduledTime) {
+		return events.ScheduledEvent{
+			Event: events.Event{
+				Name: "rest",
+				Type: events.EventTypeRest,
+			},
+			Timing: events.Timing{
+				Timestamp: time.Now().Add(10 * time.Millisecond),
+				Duration:  0,
+			},
+		}, nil
+	}
+
+	// Update tracking
+	g.lastScheduledTime = nextTickTime
 
 	// Check if next tick is in the active range
 	inRange := nextTickInPhrase >= g.startTick && nextTickInPhrase < g.endTick
@@ -93,8 +108,8 @@ func (g *GatedPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 				B:    float32(g.velocity),
 			},
 			Timing: events.Timing{
-				Delta:    delta,
-				Duration: noteDuration,
+				Timestamp: nextTickTime,
+				Duration:  noteDuration,
 			},
 		}, nil
 	}
@@ -106,8 +121,8 @@ func (g *GatedPattern) GetNextScheduledEvent() (events.ScheduledEvent, error) {
 			Type: events.EventTypeRest,
 		},
 		Timing: events.Timing{
-			Delta:    delta,
-			Duration: 0,
+			Timestamp: nextTickTime,
+			Duration:  0,
 		},
 	}, nil
 }
