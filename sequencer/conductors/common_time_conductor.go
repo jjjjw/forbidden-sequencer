@@ -6,13 +6,13 @@ import (
 
 // CommonTimeConductor implements a tick-based conductor with common time (beat-based) concepts
 type CommonTimeConductor struct {
-	tickDuration time.Duration
-	ticksPerBeat int
-	bpm          float64
-	lastBeatTime time.Time // time of the last beat
-	lastTickTime time.Time // time of the last tick
-	tickInBeat   int       // current tick within the beat (0 to ticksPerBeat-1)
-	ticks        chan struct{}
+	tickDuration    time.Duration
+	ticksPerBeat    int
+	bpm             float64
+	lastBeatTime    time.Time       // time of the last beat
+	lastTickTime    time.Time       // time of the last tick
+	tickInBeat      int             // current tick within the beat (0 to ticksPerBeat-1)
+	tickSubscribers []chan struct{} // array of channels for tick event subscribers
 }
 
 // NewCommonTimeConductor creates a new common time conductor
@@ -20,10 +20,10 @@ type CommonTimeConductor struct {
 // bpm: beats per minute
 func NewCommonTimeConductor(bpm float64, ticksPerBeat int) *CommonTimeConductor {
 	c := &CommonTimeConductor{
-		ticksPerBeat: ticksPerBeat,
-		bpm:          bpm,
-		tickInBeat:   0,
-		ticks:        make(chan struct{}, 100),
+		ticksPerBeat:    ticksPerBeat,
+		bpm:             bpm,
+		tickInBeat:      0,
+		tickSubscribers: make([]chan struct{}, 0),
 	}
 	c.updateTickDuration()
 	return c
@@ -90,19 +90,22 @@ func (c *CommonTimeConductor) AdvanceTick() {
 		c.lastBeatTime = c.lastTickTime
 	}
 
-	// Send tick notification
-	if c.ticks != nil {
+	// Send tick notification to all subscribers
+	for _, tickChan := range c.tickSubscribers {
 		select {
-		case c.ticks <- struct{}{}:
+		case tickChan <- struct{}{}:
 		default:
 			// Don't block if channel is full
 		}
 	}
 }
 
-// Ticks returns the channel for tick events
+// Ticks creates and returns a new tick subscription channel
+// Each call creates a fresh channel that will receive tick events
 func (c *CommonTimeConductor) Ticks() <-chan struct{} {
-	return c.ticks
+	tickChan := make(chan struct{}, 100)
+	c.tickSubscribers = append(c.tickSubscribers, tickChan)
+	return tickChan
 }
 
 // GetLastBeatTime returns the time of the last beat

@@ -82,6 +82,9 @@ func TestCommonTimeConductor_GetNextBeatTime(t *testing.T) {
 func TestCommonTimeConductor_Start(t *testing.T) {
 	c := NewCommonTimeConductor(120, 4) // 120 BPM, 4 ticks/beat
 
+	// Subscribe to ticks BEFORE starting
+	tickChan := c.Ticks()
+
 	c.Start()
 
 	// Wait a bit for ticks to advance
@@ -90,7 +93,7 @@ func TestCommonTimeConductor_Start(t *testing.T) {
 
 	// Check if we received tick notifications
 	select {
-	case <-c.Ticks():
+	case <-tickChan:
 		// Good, received a tick
 	default:
 		t.Error("Expected to receive at least one tick notification")
@@ -100,6 +103,9 @@ func TestCommonTimeConductor_Start(t *testing.T) {
 func TestCommonTimeConductor_TickNotification(t *testing.T) {
 	c := NewCommonTimeConductor(120, 4) // 120 BPM, 4 ticks/beat
 
+	// Subscribe to ticks BEFORE starting
+	tickChan := c.Ticks()
+
 	c.Start()
 
 	// Manually advance a tick
@@ -107,7 +113,7 @@ func TestCommonTimeConductor_TickNotification(t *testing.T) {
 
 	// Should have received a tick notification
 	select {
-	case <-c.Ticks():
+	case <-tickChan:
 		// Good
 	default:
 		t.Error("Expected tick notification after advance")

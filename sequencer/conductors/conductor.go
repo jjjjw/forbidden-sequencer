@@ -15,5 +15,7 @@ type Conductor interface {
 	Start()
 
 	// Ticks returns a channel that emits on each tick
+	// Implementation note: Each call to Ticks() should return a fresh channel
+	// to support multiple subscribers. Store channels in a slice and notify all on each tick.
 	Ticks() <-chan struct{}
 }

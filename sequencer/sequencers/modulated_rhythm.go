@@ -21,13 +21,13 @@ func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength in
 	conductor := conductors.NewModulatedRhythmConductor(phraseConductor)
 
 	// Create patterns with conditional logic:
-	// - Kick: Markov chain (50% keep playing, 60% start playing), silences after snare
+	// - Kick: Markov chain (50% keep playing, 50% start playing), silences after snare
 	// - Snare: fires at 3/4 point, 33% chance per phrase
 	// - Hihat: Markov chain (30% keep playing, 50% start playing), silences after snare
-	//          randomly selects closed (42) or open (43) per phrase (75% closed)
+	//          uses MIDI note 42 (closed hihat)
 	//          each successive hit is delayed exponentially later in the tick
 
-	kickPattern := modulated.NewBurstKickPattern(
+	kickPattern := modulated.NewKickPattern(
 		phraseConductor,
 		conductor,
 		"kick",
@@ -42,7 +42,7 @@ func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength in
 		0.7, // velocity
 	)
 
-	hihatPattern := modulated.NewConditionalHihatPattern(
+	hihatPattern := modulated.NewHihatPattern(
 		conductor,
 		"hihat",
 		0.6, // velocity
