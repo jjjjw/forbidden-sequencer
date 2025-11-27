@@ -2,60 +2,66 @@ package modulated
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
+	"forbidden_sequencer/sequencer/lib"
 )
 
-// BurstKickPattern fires kick events in bursts of 3-4 hits, then pauses for 2-3 ticks
-// Burst and pause lengths are randomly chosen each time a burst completes
+// BurstKickPattern fires kick events using a Markov chain to decide when to play
+// States: "playing" and "silent"
+// Transition probabilities:
+//   - playing → playing: 0.5 (50% keep playing)
+//   - playing → silent: 0.5 (50% go silent)
+//   - silent → silent: 0.4 (40% stay silent)
+//   - silent → playing: 0.6 (60% start playing)
+//
+// Silences after snare fires in the phrase
 type BurstKickPattern struct {
-	conductor         *conductors.PhraseConductor
-	name              string  // event name
-	note              uint8   // MIDI note number
-	velocity          float64 // event velocity
-	paused            bool
-	inBurst           bool // true if currently in a burst, false if in pause
-	ticksInCurrentPhase int    // how many ticks we've been in current burst/pause
-	currentBurstLength  int    // length of current burst (3-4)
-	currentPauseLength  int    // length of current pause (2-3)
-	lastSeenTick        int    // for detecting phrase boundaries
+	conductor       *conductors.PhraseConductor
+	rhythmConductor *conductors.ModulatedRhythmConductor
+	name            string  // event name
+	note            uint8   // MIDI note number
+	velocity        float64 // event velocity
+	paused          bool
+	chain           *lib.MarkovChain // Markov chain for play/silent decisions
 }
 
 // NewBurstKickPattern creates a new burst kick pattern
 func NewBurstKickPattern(
 	conductor *conductors.PhraseConductor,
+	rhythmConductor *conductors.ModulatedRhythmConductor,
 	name string,
 	note uint8,
 	velocity float64,
 ) *BurstKickPattern {
-	p := &BurstKickPattern{
-		conductor:    conductor,
-		name:         name,
-		note:         note,
-		velocity:     velocity,
-		paused:       true,
-		inBurst:      true,
-		lastSeenTick: -1,
-	}
-	p.chooseBurstAndPause()
-	return p
-}
+	// Create Markov chain with two states: playing and silent
+	chain := lib.NewMarkovChain(42)
 
-// chooseBurstAndPause randomly selects burst length (3-4) and pause length (2-3)
-func (b *BurstKickPattern) chooseBurstAndPause() {
-	b.currentBurstLength = 3 + rand.Intn(2)  // 3 or 4
-	b.currentPauseLength = 2 + rand.Intn(2)  // 2 or 3
+	// Set transition probabilities (using string-based state transitions)
+	// When playing: 50% keep playing, 50% go silent
+	chain.SetTransitionProbability("playing", "playing", 0.5)
+	chain.SetTransitionProbability("playing", "silent", 0.5)
+
+	// When silent: 40% stay silent, 60% start playing
+	chain.SetTransitionProbability("silent", "silent", 0.5)
+	chain.SetTransitionProbability("silent", "playing", 0.5)
+
+	return &BurstKickPattern{
+		conductor:       conductor,
+		rhythmConductor: rhythmConductor,
+		name:            name,
+		note:            note,
+		velocity:        velocity,
+		paused:          true,
+		chain:           chain,
+	}
 }
 
 // Reset resets the pattern state
 func (b *BurstKickPattern) Reset() {
-	b.inBurst = true
-	b.ticksInCurrentPhase = 0
-	b.lastSeenTick = -1
-	b.chooseBurstAndPause()
+	b.chain.Reset()
 }
 
 // Play resumes the pattern
@@ -70,40 +76,7 @@ func (b *BurstKickPattern) Stop() {
 
 // String returns a string representation of the pattern
 func (b *BurstKickPattern) String() string {
-	return fmt.Sprintf("%s (burst %d, pause %d)", b.name, b.currentBurstLength, b.currentPauseLength)
-}
-
-// updateBurstState advances the burst/pause state machine
-func (b *BurstKickPattern) updateBurstState() {
-	b.ticksInCurrentPhase++
-
-	if b.inBurst {
-		// Check if burst is complete
-		if b.ticksInCurrentPhase >= b.currentBurstLength {
-			b.inBurst = false
-			b.ticksInCurrentPhase = 0
-		}
-	} else {
-		// Check if pause is complete
-		if b.ticksInCurrentPhase >= b.currentPauseLength {
-			b.inBurst = true
-			b.ticksInCurrentPhase = 0
-			// Choose new burst and pause lengths for the next cycle
-			b.chooseBurstAndPause()
-		}
-	}
-}
-
-// checkForPhraseReset detects phrase boundaries and resets state if needed
-func (b *BurstKickPattern) checkForPhraseReset() {
-	currentTick := b.conductor.GetNextTickInPhrase()
-
-	// Detect phrase wrap (tick went backwards)
-	if b.lastSeenTick != -1 && currentTick < b.lastSeenTick {
-		b.Reset()
-	}
-
-	b.lastSeenTick = currentTick
+	return fmt.Sprintf("%s (markov: 50%% play, 60%% start)", b.name)
 }
 
 // GetScheduledEventsForTick implements the Pattern interface
@@ -113,22 +86,23 @@ func (b *BurstKickPattern) GetScheduledEventsForTick(nextTickTime time.Time, tic
 		return nil
 	}
 
-	// Check for phrase reset
-	b.checkForPhraseReset()
-
-	// Only fire during first 50% of phrase
+	// Get tick position from conductor
 	nextTickInPhrase := b.conductor.GetNextTickInPhrase()
-	phraseLength := b.conductor.GetPhraseLength()
-	halfPoint := phraseLength / 2
-	inActiveRange := nextTickInPhrase < halfPoint
+	snareTriggerTick := b.rhythmConductor.GetSnareTriggerTick()
 
-	// Determine if we should fire (in burst AND in first 50% of phrase)
-	shouldFire := b.inBurst && inActiveRange
+	// If snare will trigger and we're at or past the snare tick, stay silent
+	if b.rhythmConductor.WillSnareTrigger() && nextTickInPhrase >= snareTriggerTick {
+		return nil
+	}
 
-	// Update state for next tick
-	b.updateBurstState()
+	// Use Markov chain to decide whether to play this tick
+	state, err := b.chain.Next()
+	if err != nil {
+		return nil
+	}
 
-	if shouldFire {
+	// Only fire if we're in the "playing" state
+	if state == "playing" {
 		// Fire event with duration = 75% of tick
 		noteDuration := time.Duration(float64(tickDuration) * 0.75)
 		return []events.ScheduledEvent{{

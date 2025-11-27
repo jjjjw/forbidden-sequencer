@@ -10,33 +10,32 @@ type ModulatedRhythmConductor struct {
 	*PhraseConductor
 	snareWillTrigger bool // whether snare will trigger this phrase (33% chance)
 	hihatClosed      bool // whether hihat is closed this phrase (75% closed, 25% open)
-	lastSeenTick     int  // last tick we saw, to detect phrase boundaries
 }
 
 // NewModulatedRhythmConductor creates a conductor with rhythm decision-making
 func NewModulatedRhythmConductor(phraseConductor *PhraseConductor) *ModulatedRhythmConductor {
 	rdc := &ModulatedRhythmConductor{
 		PhraseConductor: phraseConductor,
-		lastSeenTick:    -1, // -1 means we haven't seen any tick yet
 	}
 
 	// Make initial decisions
 	rdc.makeRhythmDecisions()
 
+	// Subscribe to ticks to detect phrase boundaries
+	tickChan := phraseConductor.Ticks()
+	go rdc.watchPhraseChanges(tickChan)
+
 	return rdc
 }
 
-// checkAndUpdatePhrase checks if we've wrapped to a new phrase and updates decisions if so
-func (r *ModulatedRhythmConductor) checkAndUpdatePhrase() {
-	currentTick := r.GetNextTickInPhrase() // Get the NEXT tick (what patterns will use)
-
-	// Check if we've wrapped around (phrase boundary)
-	// This happens when currentTick < lastSeenTick or when we're seeing tick for first time
-	if r.lastSeenTick != -1 && currentTick < r.lastSeenTick {
-		r.makeRhythmDecisions()
+// watchPhraseChanges listens for tick events and makes new decisions at phrase boundaries
+func (r *ModulatedRhythmConductor) watchPhraseChanges(tickChan <-chan struct{}) {
+	for range tickChan {
+		// Check if we're at the start of a new phrase (tick 0)
+		if r.GetCurrentTickInPhrase() == 0 {
+			r.makeRhythmDecisions()
+		}
 	}
-
-	r.lastSeenTick = currentTick
 }
 
 // makeRhythmDecisions generates random decisions for the current phrase
@@ -50,13 +49,11 @@ func (r *ModulatedRhythmConductor) makeRhythmDecisions() {
 
 // WillSnareTrigger returns whether the snare will trigger this phrase
 func (r *ModulatedRhythmConductor) WillSnareTrigger() bool {
-	r.checkAndUpdatePhrase()
 	return r.snareWillTrigger
 }
 
 // IsHihatClosed returns whether the hihat is closed (true) or open (false) this phrase
 func (r *ModulatedRhythmConductor) IsHihatClosed() bool {
-	r.checkAndUpdatePhrase()
 	return r.hihatClosed
 }
 

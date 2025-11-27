@@ -11,8 +11,8 @@ type PhraseConductor struct {
 	phraseLength     int     // length of phrase in ticks
 	tickInPhrase     int     // current tick within the phrase (0 to phraseLength-1)
 	lastTickTime     time.Time
-	rateChanges      chan float64  // channel for rate multiplier updates
-	ticks            chan struct{} // channel for tick events
+	rateChanges      chan float64    // channel for rate multiplier updates
+	tickSubscribers  []chan struct{} // array of channels for tick event subscribers
 }
 
 // NewPhraseConductor creates a new modulated conductor
@@ -25,7 +25,7 @@ func NewPhraseConductor(baseTickDuration time.Duration, phraseLength int) *Phras
 		phraseLength:     phraseLength,
 		tickInPhrase:     0,
 		rateChanges:      make(chan float64, 10),
-		ticks:            make(chan struct{}, 100),
+		tickSubscribers:  make([]chan struct{}, 0),
 	}
 }
 
@@ -124,17 +124,20 @@ func (c *PhraseConductor) advanceTick() {
 		c.tickInPhrase = 0
 	}
 
-	// Send tick notification
-	if c.ticks != nil {
+	// Send tick notification to all subscribers
+	for _, tickChan := range c.tickSubscribers {
 		select {
-		case c.ticks <- struct{}{}:
+		case tickChan <- struct{}{}:
 		default:
 			// Don't block if channel is full
 		}
 	}
 }
 
-// Ticks returns the channel for tick events
+// Ticks creates and returns a new tick subscription channel
+// Each call creates a fresh channel that will receive tick events
 func (c *PhraseConductor) Ticks() <-chan struct{} {
-	return c.ticks
+	tickChan := make(chan struct{}, 100)
+	c.tickSubscribers = append(c.tickSubscribers, tickChan)
+	return tickChan
 }

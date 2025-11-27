@@ -3,20 +3,16 @@ package lib
 import (
 	"fmt"
 	"math/rand"
-
-	"forbidden_sequencer/sequencer/events"
 )
 
 // TODO: Support second-order or n-order Markov chains
-// (where next event depends on last n events, not just last 1)
+// (where next state depends on last n states, not just last 1)
 
-// MarkovChain represents a first-order Markov chain for generating events
+// MarkovChain represents a first-order Markov chain for state transitions
 type MarkovChain struct {
-	// Transition probabilities: transitions[fromEvent][toEvent] = probability
+	// Transition probabilities: transitions[fromState][toState] = probability
 	transitions map[string]map[string]float32
-	// Event pool for the chain
-	events map[string]events.Event
-	// Current state (last generated event name)
+	// Current state
 	currentState string
 	// Random number generator
 	rng *rand.Rand
@@ -26,75 +22,65 @@ type MarkovChain struct {
 func NewMarkovChain(seed int64) *MarkovChain {
 	return &MarkovChain{
 		transitions: make(map[string]map[string]float32),
-		events:      make(map[string]events.Event),
 		rng:         rand.New(rand.NewSource(seed)),
 	}
 }
 
-// AddEvent adds an event to the chain's event pool
-func (m *MarkovChain) AddEvent(event events.Event) {
-	m.events[event.Name] = event
-	// Initialize transitions map for this event if it doesn't exist
-	if m.transitions[event.Name] == nil {
-		m.transitions[event.Name] = make(map[string]float32)
-	}
-}
-
-// SetTransitionProbability sets the probability of transitioning from one event to another
+// SetTransitionProbability sets the probability of transitioning from one state to another
 // probability should be between 0.0 and 1.0
-func (m *MarkovChain) SetTransitionProbability(fromEvent, toEvent string, probability float32) error {
+func (m *MarkovChain) SetTransitionProbability(fromState, toState string, probability float32) error {
 	if probability < 0.0 || probability > 1.0 {
 		return fmt.Errorf("probability must be between 0.0 and 1.0, got %f", probability)
 	}
 
-	if m.transitions[fromEvent] == nil {
-		m.transitions[fromEvent] = make(map[string]float32)
+	if m.transitions[fromState] == nil {
+		m.transitions[fromState] = make(map[string]float32)
 	}
 
-	m.transitions[fromEvent][toEvent] = probability
+	m.transitions[fromState][toState] = probability
 	return nil
 }
 
-// GetTransitionProbability returns the probability of transitioning from one event to another
-func (m *MarkovChain) GetTransitionProbability(fromEvent, toEvent string) float32 {
-	if m.transitions[fromEvent] == nil {
+// GetTransitionProbability returns the probability of transitioning from one state to another
+func (m *MarkovChain) GetTransitionProbability(fromState, toState string) float32 {
+	if m.transitions[fromState] == nil {
 		return 0.0
 	}
-	return m.transitions[fromEvent][toEvent]
+	return m.transitions[fromState][toState]
 }
 
-// NormalizeTransitions normalizes all transition probabilities for a given event
+// NormalizeTransitions normalizes all transition probabilities for a given state
 // so they sum to 1.0
-func (m *MarkovChain) NormalizeTransitions(fromEvent string) {
-	if m.transitions[fromEvent] == nil {
+func (m *MarkovChain) NormalizeTransitions(fromState string) {
+	if m.transitions[fromState] == nil {
 		return
 	}
 
 	var sum float32
-	for _, prob := range m.transitions[fromEvent] {
+	for _, prob := range m.transitions[fromState] {
 		sum += prob
 	}
 
 	if sum > 0 {
-		for toEvent := range m.transitions[fromEvent] {
-			m.transitions[fromEvent][toEvent] /= sum
+		for toState := range m.transitions[fromState] {
+			m.transitions[fromState][toState] /= sum
 		}
 	}
 }
 
-// Generate generates the next event based on current state and transition probabilities
-func (m *MarkovChain) Generate() (events.Event, error) {
-	// If no current state, pick a random event to start
+// Next generates the next state based on current state and transition probabilities
+func (m *MarkovChain) Next() (string, error) {
+	// If no current state, pick a random state to start
 	if m.currentState == "" {
-		if len(m.events) == 0 {
-			return events.Event{}, fmt.Errorf("no events in chain")
+		if len(m.transitions) == 0 {
+			return "", fmt.Errorf("no states in chain")
 		}
 
-		// Pick random starting event
-		i := m.rng.Intn(len(m.events))
-		for name := range m.events {
+		// Pick random starting state
+		i := m.rng.Intn(len(m.transitions))
+		for state := range m.transitions {
 			if i == 0 {
-				m.currentState = name
+				m.currentState = state
 				break
 			}
 			i--
@@ -104,32 +90,32 @@ func (m *MarkovChain) Generate() (events.Event, error) {
 	// Get transitions from current state
 	trans := m.transitions[m.currentState]
 	if len(trans) == 0 {
-		// No transitions defined, stay on current event
-		return m.events[m.currentState], nil
+		// No transitions defined, stay on current state
+		return m.currentState, nil
 	}
 
-	// Select next event based on probabilities
+	// Select next state based on probabilities
 	r := m.rng.Float32()
 	var cumulative float32
 
-	for toEvent, prob := range trans {
+	for toState, prob := range trans {
 		cumulative += prob
 		if r <= cumulative {
-			m.currentState = toEvent
-			return m.events[toEvent], nil
+			m.currentState = toState
+			return m.currentState, nil
 		}
 	}
 
-	// Fallback to current event if probabilities don't sum to 1
-	return m.events[m.currentState], nil
+	// Fallback to current state if probabilities don't sum to 1
+	return m.currentState, nil
 }
 
 // SetCurrentState manually sets the current state of the chain
-func (m *MarkovChain) SetCurrentState(eventName string) error {
-	if _, exists := m.events[eventName]; !exists {
-		return fmt.Errorf("event %s does not exist in chain", eventName)
+func (m *MarkovChain) SetCurrentState(stateName string) error {
+	if _, exists := m.transitions[stateName]; !exists {
+		return fmt.Errorf("state %s does not exist in chain", stateName)
 	}
-	m.currentState = eventName
+	m.currentState = stateName
 	return nil
 }
 

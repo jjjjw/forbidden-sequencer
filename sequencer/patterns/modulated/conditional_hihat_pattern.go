@@ -7,20 +7,27 @@ import (
 
 	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
+	"forbidden_sequencer/sequencer/lib"
 )
 
-// ConditionalHihatPattern fires hihat events in different ranges based on snare decision:
-// - If snare will trigger: fires from 0-50% of phrase
-// - If snare won't trigger: fires from 25%-50% of phrase
+// ConditionalHihatPattern fires hihat events using a Markov chain
+// States: "playing" and "silent"
+// Transition probabilities:
+//   - playing → playing: 0.3 (30% keep playing)
+//   - playing → silent: 0.7 (70% go silent)
+//   - silent → silent: 0.5 (50% stay silent)
+//   - silent → playing: 0.5 (50% start playing)
 // The hihat type (closed/open) is determined by the conductor each phrase
 // Each successive hit is delayed exponentially later within the tick
+// Silences after snare fires in the phrase
 type ConditionalHihatPattern struct {
 	conductor         *conductors.ModulatedRhythmConductor
-	name              string  // event name
-	velocity          float64 // event velocity
+	name              string           // event name
+	velocity          float64          // event velocity
 	paused            bool
-	ticksInActiveRange int     // counter for exponential delay calculation
-	wasInRange         bool    // tracks if we were in range last tick
+	ticksInActiveRange int              // counter for exponential delay calculation
+	wasInRange         bool             // tracks if we were in range last tick
+	chain              *lib.MarkovChain // Markov chain for play/silent decisions
 }
 
 // NewConditionalHihatPattern creates a new conditional hihat pattern
@@ -29,11 +36,24 @@ func NewConditionalHihatPattern(
 	name string,
 	velocity float64,
 ) *ConditionalHihatPattern {
+	// Create Markov chain with two states: playing and silent
+	chain := lib.NewMarkovChain(43) // Different seed from kick
+
+	// Set transition probabilities (less busy than kick)
+	// When playing: 30% keep playing, 70% go silent
+	chain.SetTransitionProbability("playing", "playing", 0.3)
+	chain.SetTransitionProbability("playing", "silent", 0.7)
+
+	// When silent: 50% stay silent, 50% start playing
+	chain.SetTransitionProbability("silent", "silent", 0.5)
+	chain.SetTransitionProbability("silent", "playing", 0.5)
+
 	return &ConditionalHihatPattern{
 		conductor: conductor,
 		name:      name,
 		velocity:  velocity,
 		paused:    true,
+		chain:     chain,
 	}
 }
 
@@ -41,6 +61,7 @@ func NewConditionalHihatPattern(
 func (c *ConditionalHihatPattern) Reset() {
 	c.ticksInActiveRange = 0
 	c.wasInRange = false
+	c.chain.Reset()
 }
 
 // Play resumes the pattern
@@ -67,32 +88,32 @@ func (c *ConditionalHihatPattern) GetScheduledEventsForTick(nextTickTime time.Ti
 
 	// Get tick position from conductor
 	nextTickInPhrase := c.conductor.GetNextTickInPhrase()
-	phraseLength := c.conductor.GetPhraseLength()
+	snareTriggerTick := c.conductor.GetSnareTriggerTick()
 
-	// Calculate range boundaries
-	quarterPoint := phraseLength / 4
-	halfPoint := phraseLength / 2
-
-	var inRange bool
-	if c.conductor.WillSnareTrigger() {
-		// Snare will trigger: hihats fire from 0-50%
-		inRange = nextTickInPhrase >= 0 && nextTickInPhrase < halfPoint
-	} else {
-		// No snare: hihats fire from 25%-50%
-		inRange = nextTickInPhrase >= quarterPoint && nextTickInPhrase < halfPoint
+	// If snare will trigger and we're at or past the snare tick, stay silent
+	if c.conductor.WillSnareTrigger() && nextTickInPhrase >= snareTriggerTick {
+		return nil
 	}
 
-	// Track range transitions
+	// Use Markov chain to decide whether to play this tick
+	state, err := c.chain.Next()
+	if err != nil {
+		return nil
+	}
+
+	// Track range transitions for exponential delay
+	inRange := state == "playing"
 	if inRange && !c.wasInRange {
-		// Just entered range, reset counter
+		// Just started playing, reset counter
 		c.ticksInActiveRange = 0
 	} else if !inRange && c.wasInRange {
-		// Just exited range, reset counter
+		// Just stopped playing, reset counter
 		c.ticksInActiveRange = 0
 	}
 	c.wasInRange = inRange
 
-	if inRange {
+	// Only fire if we're in the "playing" state
+	if state == "playing" {
 		// Determine which hihat note to use based on conductor's decision
 		var note uint8
 		if c.conductor.IsHihatClosed() {
@@ -127,6 +148,6 @@ func (c *ConditionalHihatPattern) GetScheduledEventsForTick(nextTickTime time.Ti
 		}}
 	}
 
-	// Outside range - return no events
+	// Silent state - return no events
 	return nil
 }
