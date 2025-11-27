@@ -4,3 +4,4 @@ frontend/dist
 forbidden-sequencer
 forbidden_sequencer
 debug.log
+debug/

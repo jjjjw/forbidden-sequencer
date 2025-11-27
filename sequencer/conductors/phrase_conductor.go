@@ -54,6 +54,11 @@ func (c *PhraseConductor) GetPhraseLength() int {
 	return c.phraseLength
 }
 
+// GetCurrentTickInPhrase returns the current tick position within the phrase
+func (c *PhraseConductor) GetCurrentTickInPhrase() int {
+	return c.tickInPhrase
+}
+
 // GetNextTickInPhrase returns the next tick position within the phrase
 func (c *PhraseConductor) GetNextTickInPhrase() int {
 	next := c.tickInPhrase + 1

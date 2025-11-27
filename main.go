@@ -38,7 +38,7 @@ func initialModel() tui.Model {
 	}
 	m.MidiAdapter = midiAdapter
 
-	// Restore channel mappings
+	// Restore channel mappings (will override defaults if user has saved preferences)
 	for eventName, channel := range settings.ChannelMappings {
 		midiAdapter.SetChannelMapping(eventName, channel)
 	}
