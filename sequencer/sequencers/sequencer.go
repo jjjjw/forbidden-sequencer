@@ -20,21 +20,21 @@ type Pattern interface {
 
 // Sequencer manages multiple patterns and outputs events through an adapter
 type Sequencer struct {
-	patterns  []Pattern
-	adapter   adapters.EventAdapter
-	conductor conductors.Conductor
-	debug     bool
-	Events    chan events.ScheduledEvent
+	patterns   []Pattern
+	adapter    adapters.EventAdapter
+	conductor  conductors.Conductor
+	debug      bool
+	eventsChan chan<- events.ScheduledEvent
 }
 
 // NewSequencer creates a new sequencer with the given patterns, conductor, and adapter
-func NewSequencer(patterns []Pattern, conductor conductors.Conductor, adapter adapters.EventAdapter, debug bool) *Sequencer {
+func NewSequencer(patterns []Pattern, conductor conductors.Conductor, adapter adapters.EventAdapter, eventsChan chan<- events.ScheduledEvent, debug bool) *Sequencer {
 	return &Sequencer{
-		patterns:  patterns,
-		conductor: conductor,
-		adapter:   adapter,
-		debug:     debug,
-		Events:    make(chan events.ScheduledEvent, 100),
+		patterns:   patterns,
+		conductor:  conductor,
+		adapter:    adapter,
+		eventsChan: eventsChan,
+		debug:      debug,
 	}
 }
 
@@ -78,9 +78,9 @@ func (s *Sequencer) scheduleEvent(scheduled events.ScheduledEvent) {
 		}
 
 		// Send event to channel for TUI display
-		if s.Events != nil {
+		if s.eventsChan != nil {
 			select {
-			case s.Events <- scheduled:
+			case s.eventsChan <- scheduled:
 			default:
 				// Don't block if channel is full
 			}
@@ -119,11 +119,6 @@ func (s *Sequencer) handleError(msg string) {
 		log.Println(msg)
 		time.Sleep(10 * time.Millisecond)
 	}
-}
-
-// GetEventsChannel returns the channel for scheduled events
-func (s *Sequencer) GetEventsChannel() chan events.ScheduledEvent {
-	return s.Events
 }
 
 // String returns a string representation of the sequencer

@@ -49,8 +49,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.MidiAdapter != nil {
 				m.MidiAdapter.Close()
 			}
-			if m.Sequencer != nil {
-				m.Sequencer.Stop()
+			if m.ActiveSequencer != nil {
+				m.ActiveSequencer.Stop()
 			}
 			return m, tea.Quit
 		}
@@ -72,60 +72,95 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// If showing sequencer list, handle list navigation
+	if m.ShowingSequencerList {
+		return m.updateSequencerList(msg)
+	}
+
+	// Try sequencer-specific input first
+	if m.ActiveSequencer != nil {
+		if m.ActiveSequencer.HandleInput(msg) {
+			return m, nil
+		}
+	}
+
+	// Global keys
 	switch msg.String() {
 	case "q", "esc":
 		if m.MidiAdapter != nil {
 			m.MidiAdapter.Close()
 		}
-		if m.Sequencer != nil {
-			m.Sequencer.Stop()
+		if m.ActiveSequencer != nil {
+			m.ActiveSequencer.Stop()
 		}
 		return m, tea.Quit
 
 	case " ", "p":
-		if m.Sequencer != nil {
+		if m.ActiveSequencer != nil {
 			if m.IsPlaying {
-				m.Sequencer.Stop()
+				m.ActiveSequencer.Stop()
 				m.IsPlaying = false
 			} else {
-				m.Sequencer.Play()
+				m.ActiveSequencer.Play()
 				m.IsPlaying = true
 			}
 		}
 
-	case "r":
-		// Reset to beginning
-		if m.Sequencer != nil {
-			m.Sequencer.Reset()
-		}
+	case "tab":
+		// Toggle sequencer list
+		m.ShowingSequencerList = true
+		m.SelectedSequencerIndex = m.ActiveSequencerIndex
 
 	case "s":
 		// Go to settings
 		m.SelectedSetting = 0
 		m.Screen = ScreenSettings
+	}
+
+	return m, nil
+}
+
+func (m Model) updateSequencerList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "esc":
+		// Close sequencer list without switching
+		m.ShowingSequencerList = false
 
 	case "up", "k":
-		// Increase rate
-		if m.RateChanges != nil {
-			m.CurrentRate *= 1.1
-			select {
-			case m.RateChanges <- m.CurrentRate:
-			default:
-			}
+		if m.SelectedSequencerIndex > 0 {
+			m.SelectedSequencerIndex--
 		}
 
 	case "down", "j":
-		// Decrease rate
-		if m.RateChanges != nil {
-			m.CurrentRate /= 1.1
-			if m.CurrentRate < 0.1 {
-				m.CurrentRate = 0.1
+		if m.SelectedSequencerIndex < len(m.SequencerFactories)-1 {
+			m.SelectedSequencerIndex++
+		}
+
+	case "enter":
+		// Switch to selected sequencer
+		if m.SelectedSequencerIndex != m.ActiveSequencerIndex {
+			// Stop and destroy current sequencer
+			if m.ActiveSequencer != nil {
+				m.ActiveSequencer.Stop()
+				m.ActiveSequencer = nil
 			}
-			select {
-			case m.RateChanges <- m.CurrentRate:
-			default:
+
+			// Create new sequencer from factory
+			m.ActiveSequencerIndex = m.SelectedSequencerIndex
+			if m.ActiveSequencerIndex < len(m.SequencerFactories) && m.MidiAdapter != nil {
+				factory := m.SequencerFactories[m.ActiveSequencerIndex]
+				m.ActiveSequencer = factory.Create(m.MidiAdapter, m.EventChan)
+				m.ActiveSequencer.Start()
+				m.IsPlaying = false
+
+				// Save to settings
+				m.Settings.SelectedSequencer = factory.GetName()
+				if err := SaveSettings(m.Settings); err != nil {
+					m.Err = fmt.Errorf("failed to save settings: %w", err)
+				}
 			}
 		}
+		m.ShowingSequencerList = false
 	}
 
 	return m, nil

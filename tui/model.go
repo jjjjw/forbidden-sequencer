@@ -5,7 +5,7 @@ import (
 
 	"forbidden_sequencer/sequencer/adapters"
 	"forbidden_sequencer/sequencer/events"
-	"forbidden_sequencer/sequencer/sequencers"
+	"forbidden_sequencer/tui/sequencers"
 )
 
 // EventLogEntry represents a single event in the event log
@@ -26,22 +26,25 @@ const (
 
 // Settings represents persisted application settings
 type Settings struct {
-	MIDIPort        int              `json:"midiPort"`
-	ChannelMappings map[string]uint8 `json:"channelMappings"`
+	MIDIPort          int              `json:"midiPort"`
+	ChannelMappings   map[string]uint8 `json:"channelMappings"`
+	SelectedSequencer string           `json:"selectedSequencer"` // name of the selected sequencer
 }
 
 // Model is the main application state
 type Model struct {
-	Sequencer   *sequencers.Sequencer
 	MidiAdapter *adapters.MIDIAdapter
 	Settings    *Settings
 	IsPlaying   bool
 	Screen      Screen
 	Err         error
 
-	// Rate control
-	RateChanges chan<- float64 // channel to send rate changes to conductor
-	CurrentRate float64        // current rate multiplier for display
+	// Sequencer management
+	SequencerFactories     []sequencers.SequencerFactory // factory for each sequencer type
+	ActiveSequencer        sequencers.SequencerConfig    // currently active sequencer instance
+	ActiveSequencerIndex   int                           // index of active factory
+	ShowingSequencerList   bool                          // true when sequencer list overlay is visible
+	SelectedSequencerIndex int                           // for navigating sequencer list
 
 	// MIDI port selection
 	MidiPorts    []adapters.MIDIPortInfo

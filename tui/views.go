@@ -24,6 +24,11 @@ func (m Model) View() string {
 }
 
 func (m Model) viewMain() string {
+	// If showing sequencer list, show overlay
+	if m.ShowingSequencerList {
+		return m.viewSequencerList()
+	}
+
 	// Left panel - main content
 	var left strings.Builder
 
@@ -31,9 +36,13 @@ func (m Model) viewMain() string {
 	left.WriteString(TitleStyle.Render("Forbidden Sequencer"))
 	left.WriteString("\n\n")
 
-	// Sequencer info
-	if m.Sequencer != nil {
-		left.WriteString(StatusStyle.Render(fmt.Sprintf("%v", m.Sequencer)))
+	// Active sequencer name
+	if m.ActiveSequencer != nil {
+		left.WriteString(StatusStyle.Render("Sequencer: " + m.ActiveSequencer.GetName()))
+		left.WriteString("\n\n")
+
+		// Sequencer status
+		left.WriteString(StatusStyle.Render(m.ActiveSequencer.GetStatus()))
 		left.WriteString("\n\n")
 	}
 
@@ -52,28 +61,62 @@ func (m Model) viewMain() string {
 	left.WriteString(status)
 	left.WriteString("\n\n")
 
+	// Help - layered keybindings
+	var helpItems []string
 
-	// Rate display
-	if m.RateChanges != nil {
-		left.WriteString(StatusStyle.Render(fmt.Sprintf("Rate: %.2fx", m.CurrentRate)))
-		left.WriteString("\n\n")
+	// Sequencer-specific keybindings
+	if m.ActiveSequencer != nil {
+		sequencerHelp := m.ActiveSequencer.GetKeybindings()
+		if sequencerHelp != "" {
+			helpItems = append(helpItems, sequencerHelp)
+		}
 	}
 
-	// Help
-	help := []string{
+	// Global keybindings
+	globalHelp := []string{
 		"[space/p] Play/Mute",
-		"[r] Reset",
-		"[j/k] Rate -/+",
+		"[tab] Switch Sequencer",
 		"[s] Settings",
 		"[q] Quit",
 	}
-	left.WriteString(BoxStyle.Render(HelpStyle.Render(strings.Join(help, "  "))))
+	helpItems = append(helpItems, strings.Join(globalHelp, " • "))
+
+	left.WriteString(BoxStyle.Render(HelpStyle.Render(strings.Join(helpItems, "\n"))))
 
 	// Right panel - event log
 	right := m.viewEventLog()
 
 	// Join left and right panels
 	return lipgloss.JoinHorizontal(lipgloss.Top, left.String(), "  ", right)
+}
+
+func (m Model) viewSequencerList() string {
+	var b strings.Builder
+
+	b.WriteString(TitleStyle.Render("Select Sequencer"))
+	b.WriteString("\n\n")
+
+	for i, factory := range m.SequencerFactories {
+		cursor := "  "
+		style := lipgloss.NewStyle()
+		if i == m.SelectedSequencerIndex {
+			cursor = "> "
+			style = SelectedStyle
+		}
+		current := ""
+		if i == m.ActiveSequencerIndex {
+			current = " (active)"
+		}
+		b.WriteString(style.Render(fmt.Sprintf("%s%s%s", cursor, factory.GetName(), current)))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	// Help
+	help := "[j/k] Navigate  [enter] Select  [esc] Cancel"
+	b.WriteString(HelpStyle.Render(help))
+
+	return b.String()
 }
 
 func (m Model) viewEventLog() string {

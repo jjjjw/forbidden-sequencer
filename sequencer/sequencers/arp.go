@@ -5,6 +5,7 @@ import (
 
 	"forbidden_sequencer/sequencer/adapters"
 	"forbidden_sequencer/sequencer/conductors"
+	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 	"forbidden_sequencer/sequencer/patterns/arp"
 )
@@ -15,6 +16,7 @@ import (
 // scale: musical scale to use (lib.MajorScale or lib.MinorScale)
 // rootNote: base MIDI note (e.g., 60 for middle C)
 // adapter: MIDI or other output adapter
+// eventChan: channel to send events to
 // debug: debug mode flag
 func NewArpSequencer(
 	baseTickDuration time.Duration,
@@ -22,8 +24,9 @@ func NewArpSequencer(
 	scale lib.Scale,
 	rootNote uint8,
 	adapter adapters.EventAdapter,
+	eventChan chan<- events.ScheduledEvent,
 	debug bool,
-) (*Sequencer, *arp.ArpPattern) {
+) (*Sequencer, *arp.ArpPattern, *conductors.PhraseConductor) {
 	// Create phrase conductor
 	phraseConductor := conductors.NewPhraseConductor(baseTickDuration, len(sequence))
 
@@ -38,5 +41,5 @@ func NewArpSequencer(
 
 	patterns := []Pattern{arpPattern}
 
-	return NewSequencer(patterns, phraseConductor, adapter, debug), arpPattern
+	return NewSequencer(patterns, phraseConductor, adapter, eventChan, debug), arpPattern, phraseConductor
 }

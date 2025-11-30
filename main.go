@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"forbidden_sequencer/sequencer/adapters"
-	"forbidden_sequencer/sequencer/sequencers"
+	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/tui"
+	"forbidden_sequencer/tui/sequencers"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -18,8 +18,9 @@ func initialModel() tui.Model {
 	if err != nil {
 		fmt.Printf("Failed to load settings, using defaults: %v\n", err)
 		settings = &tui.Settings{
-			MIDIPort:        0,
-			ChannelMappings: make(map[string]uint8),
+			MIDIPort:          0,
+			ChannelMappings:   make(map[string]uint8),
+			SelectedSequencer: "Modulated Rhythm", // default
 		}
 	}
 
@@ -43,15 +44,31 @@ func initialModel() tui.Model {
 		midiAdapter.SetChannelMapping(eventName, channel)
 	}
 
-	// Create modulated rhythm sequencer
-	// baseTickDuration: 100ms, phraseLength: 16 ticks
-	sequencer, conductor := sequencers.NewModulatedRhythmSequencer(100*time.Millisecond, 16, midiAdapter, false)
-	m.Sequencer = sequencer
-	m.RateChanges = conductor.RateChanges()
-	m.CurrentRate = 1.0
+	// Create event channel (owned by model)
+	m.EventChan = make(chan events.ScheduledEvent, 100)
 
-	// Initialize sequencer (starts paused)
-	m.Sequencer.Start()
+	// Create sequencer factories
+	m.SequencerFactories = []sequencers.SequencerFactory{
+		&sequencers.ModulatedRhythmFactory{},
+		&sequencers.ArpFactory{},
+		&sequencers.TechnoFactory{},
+	}
+
+	// Find and activate the saved sequencer
+	m.ActiveSequencerIndex = 0
+	for i, factory := range m.SequencerFactories {
+		if factory.GetName() == settings.SelectedSequencer {
+			m.ActiveSequencerIndex = i
+			break
+		}
+	}
+
+	// Create and initialize active sequencer (starts paused)
+	if m.ActiveSequencerIndex < len(m.SequencerFactories) {
+		factory := m.SequencerFactories[m.ActiveSequencerIndex]
+		m.ActiveSequencer = factory.Create(midiAdapter, m.EventChan)
+		m.ActiveSequencer.Start()
+	}
 
 	// Load MIDI ports
 	if ports, err := midiAdapter.ListAvailablePorts(); err == nil {
@@ -69,15 +86,12 @@ func main() {
 	m := initialModel()
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
-	// Set up goroutines to forward channel events to TUI
-	if m.Sequencer != nil {
-		// Forward events
-		go func() {
-			for event := range m.Sequencer.GetEventsChannel() {
-				p.Send(tui.EventMsg(event))
-			}
-		}()
-	}
+	// Single goroutine to forward events from the channel to TUI
+	go func() {
+		for event := range m.EventChan {
+			p.Send(tui.EventMsg(event))
+		}
+	}()
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
