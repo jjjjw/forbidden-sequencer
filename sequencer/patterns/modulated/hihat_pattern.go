@@ -2,7 +2,6 @@ package modulated
 
 import (
 	"fmt"
-	"math"
 	"time"
 
 	"forbidden_sequencer/sequencer/conductors"
@@ -18,16 +17,13 @@ import (
 //   - silent → silent: 0.5 (50% stay silent)
 //   - silent → playing: 0.5 (50% start playing)
 // Uses MIDI note 42 (closed hihat)
-// Each successive hit is delayed exponentially later within the tick
 // Silences after snare fires in the phrase
 type HihatPattern struct {
-	conductor         *conductors.ModulatedRhythmConductor
-	name              string           // event name
-	velocity          float64          // event velocity
-	paused            bool
-	ticksInActiveRange int              // counter for exponential delay calculation
-	wasInRange         bool             // tracks if we were in range last tick
-	chain              *lib.MarkovChain // Markov chain for play/silent decisions
+	conductor *conductors.ModulatedRhythmConductor
+	name      string           // event name
+	velocity  float64          // event velocity
+	paused    bool
+	chain     *lib.MarkovChain // Markov chain for play/silent decisions
 }
 
 // NewHihatPattern creates a new hihat pattern
@@ -59,8 +55,6 @@ func NewHihatPattern(
 
 // Reset resets the pattern state
 func (h *HihatPattern) Reset() {
-	h.ticksInActiveRange = 0
-	h.wasInRange = false
 	h.chain.Reset()
 }
 
@@ -101,33 +95,13 @@ func (h *HihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 		return nil
 	}
 
-	// Track range transitions for exponential delay
-	inRange := state == "playing"
-	if inRange && !h.wasInRange {
-		// Just started playing, reset counter
-		h.ticksInActiveRange = 0
-	} else if !inRange && h.wasInRange {
-		// Just stopped playing, reset counter
-		h.ticksInActiveRange = 0
-	}
-	h.wasInRange = inRange
-
 	// Only fire if we're in the "playing" state
 	if state == "playing" {
 		// Always use closed hihat (MIDI note 42)
 		note := uint8(42)
 
-		// Calculate exponential delay: delay grows as 1.2^position
-		// This makes each successive hit progressively later in the tick
-		// Can extend beyond tick boundaries for more pronounced swing
-		exponentialFactor := math.Pow(1.2, float64(h.ticksInActiveRange))
-		delay := time.Duration(float64(tickDuration) * 0.1 * exponentialFactor)
-
 		// Fire event with duration = 75% of tick
 		noteDuration := time.Duration(float64(tickDuration) * 0.75)
-
-		// Increment counter for next tick
-		h.ticksInActiveRange++
 
 		return []events.ScheduledEvent{{
 			Event: events.Event{
@@ -137,7 +111,7 @@ func (h *HihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 				B:    float32(h.velocity),
 			},
 			Timing: events.Timing{
-				Timestamp: nextTickTime.Add(delay),
+				Timestamp: nextTickTime,
 				Duration:  noteDuration,
 			},
 		}}

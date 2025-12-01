@@ -130,7 +130,7 @@ func (m Model) viewEventLog() string {
 	for i := 0; i < limit; i++ {
 		entry := m.EventLog[i]
 		timestamp := entry.Timestamp.Format("15:04:05.000")
-		rows = append(rows, []string{timestamp, entry.Name})
+		rows = append(rows, []string{entry.Name, timestamp})
 	}
 
 	// Create table
@@ -144,14 +144,14 @@ func (m Model) viewEventLog() string {
 			}
 			// Set min widths
 			switch col {
-			case 0: // Time
-				style = style.Width(14)
-			case 1: // Event
+			case 0: // Event
 				style = style.Width(10)
+			case 1: // Time
+				style = style.Width(14)
 			}
 			return style
 		}).
-		Headers("Time", "Event").
+		Headers("Event", "Time").
 		Rows(rows...)
 
 	return t.String()
