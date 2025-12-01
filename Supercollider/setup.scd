@@ -10,6 +10,32 @@ s.waitForBoot({
 
   s.sync; // Wait for SynthDefs to load
 
+  // Create audio bus for reverb (or reuse existing)
+  if (~reverbBus.isNil, {
+    ~reverbBus = Bus.audio(s, 2);
+    "Created reverb bus: %".format(~reverbBus.index).postln;
+  }, {
+    "Reusing existing reverb bus: %".format(~reverbBus.index).postln;
+  });
+
+  // Free existing reverb synth if it exists
+  if (~reverb.notNil, {
+    ~reverb.free;
+  });
+
+  // Create reverb synth at the tail (processes after sound sources)
+  ~reverb = Synth.tail(s, \allpassReverb, [
+    \in, ~reverbBus,
+    \out, 0,
+    \size, 0.7,
+    \decay, 0.6,
+    \wet, 0.5,
+    \hpass, 150,
+    \lpass, 9000
+  ]);
+
+  "Reverb initialized on bus %".format(~reverbBus.index).postln;
+
   // Initialize MIDI
   MIDIClient.init;
 
@@ -42,23 +68,23 @@ s.waitForBoot({
     "kick: vel=%".format(vel).postln;
   }, noteNum: 36);
 
-  // MIDIdef for snare/clap - monophonic, retriggers
+  // MIDIdef for snare/clap - monophonic, retriggers, routed to reverb bus
   MIDIdef.noteOn(\snare, { arg vel, num, chan, src;
     var amp = vel / 127.0;
     var len = 0.3;
     // Free all existing snare synths, then create new one
     ~snareGroup.freeAll;
-    Synth(\cp, [\amp, amp, \len, len], ~snareGroup);
+    Synth(\cp, [\amp, amp, \len, len, \out, ~reverbBus], ~snareGroup);
     "clap: vel=%".format(vel).postln;
   }, noteNum: 37);
 
-  // MIDIdef for hihat - monophonic, retriggers
+  // MIDIdef for hihat - monophonic, retriggers, routed to reverb bus
   MIDIdef.noteOn(\hihat, { arg vel, num, chan, src;
     var amp = vel / 127.0;
     var len = 0.15;
     // Free all existing hihat synths, then create new one
     ~hihatGroup.freeAll;
-    Synth(\hh, [\amp, amp, \len, len], ~hihatGroup);
+    Synth(\hh, [\amp, amp, \len, len, \out, ~reverbBus], ~hihatGroup);
     "hihat: vel=%".format(vel).postln;
   }, noteNum: 42);
 
