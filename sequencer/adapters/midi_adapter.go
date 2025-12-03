@@ -167,17 +167,19 @@ func (m *MIDIAdapter) SetPort(portIndex int) error {
 }
 
 // Send implements EventAdapter.Send
-// Note: Fires immediately - caller is responsible for timing (Delta)
+// Schedules MIDI messages to be sent at the event's timestamp
 func (m *MIDIAdapter) Send(scheduled events.ScheduledEvent) error {
-	switch scheduled.Event.Type {
-	case events.EventTypeNote:
-		return m.sendNote(scheduled)
-	case events.EventTypeModulation:
-		return m.sendCC(scheduled)
-	case events.EventTypeRest:
-		// Rest is a no-op
-		return nil
-	}
+	// Schedule the event to fire at its timestamp
+	time.AfterFunc(time.Until(scheduled.Timing.Timestamp), func() {
+		switch scheduled.Event.Type {
+		case events.EventTypeNote:
+			m.sendNote(scheduled)
+		case events.EventTypeModulation:
+			m.sendCC(scheduled)
+		case events.EventTypeRest:
+			// Rest is a no-op
+		}
+	})
 	return nil
 }
 

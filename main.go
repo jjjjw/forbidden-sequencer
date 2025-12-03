@@ -18,30 +18,24 @@ func initialModel() tui.Model {
 	if err != nil {
 		fmt.Printf("Failed to load settings, using defaults: %v\n", err)
 		settings = &tui.Settings{
-			MIDIPort:          0,
-			ChannelMappings:   make(map[string]uint8),
 			SelectedSequencer: "Modulated Rhythm", // default
 		}
 	}
 
-	m := tui.Model{
-		Settings:        settings,
-		Screen:          tui.ScreenMain,
-		ChannelMappings: []tui.ChannelMapping{},
-		SettingsOptions: []string{"MIDI Port", "Channel Mapping"},
-	}
-
-	// Initialize MIDI adapter
-	midiAdapter, err := adapters.NewMIDIAdapter(settings.MIDIPort)
+	// Initialize OSC adapter
+	oscAdapter, err := adapters.SetupOSCAdapter()
 	if err != nil {
-		m.Err = fmt.Errorf("failed to initialize MIDI adapter: %w", err)
-		return m
+		return tui.Model{
+			Settings: settings,
+			Screen:   tui.ScreenMain,
+			Err:      err,
+		}
 	}
-	m.MidiAdapter = midiAdapter
 
-	// Restore channel mappings (will override defaults if user has saved preferences)
-	for eventName, channel := range settings.ChannelMappings {
-		midiAdapter.SetChannelMapping(eventName, channel)
+	m := tui.Model{
+		Settings:   settings,
+		Screen:     tui.ScreenMain,
+		OSCAdapter: oscAdapter,
 	}
 
 	// Create event channel (owned by model)
@@ -64,20 +58,12 @@ func initialModel() tui.Model {
 	}
 
 	// Create and initialize active sequencer (starts paused)
+	// Use OSC adapter for better timing precision
 	if m.ActiveSequencerIndex < len(m.SequencerFactories) {
 		factory := m.SequencerFactories[m.ActiveSequencerIndex]
-		m.ActiveSequencer = factory.Create(midiAdapter, m.EventChan)
+		m.ActiveSequencer = factory.Create(oscAdapter, m.EventChan)
 		m.ActiveSequencer.Start()
 	}
-
-	// Load MIDI ports
-	if ports, err := midiAdapter.ListAvailablePorts(); err == nil {
-		m.MidiPorts = ports
-	}
-	m.SelectedPort = midiAdapter.GetCurrentPort()
-
-	// Initialize channel mappings list
-	m.UpdateChannelMappingsList()
 
 	return m
 }

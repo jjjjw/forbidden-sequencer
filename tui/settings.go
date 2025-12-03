@@ -23,10 +23,7 @@ func LoadSettings() (*Settings, error) {
 
 	// Return defaults if file doesn't exist
 	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
-		return &Settings{
-			MIDIPort:        0,
-			ChannelMappings: make(map[string]uint8),
-		}, nil
+		return &Settings{}, nil
 	}
 
 	data, err := os.ReadFile(settingsPath)
@@ -37,10 +34,6 @@ func LoadSettings() (*Settings, error) {
 	var settings Settings
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return nil, fmt.Errorf("failed to parse settings: %w", err)
-	}
-
-	if settings.ChannelMappings == nil {
-		settings.ChannelMappings = make(map[string]uint8)
 	}
 
 	return &settings, nil

@@ -50,42 +50,41 @@ func (s *Sequencer) Start() {
 // runTickLoop listens for conductor ticks and schedules events from patterns
 func (s *Sequencer) runTickLoop() {
 	for range s.conductor.Ticks() {
-		// Get timing info for next tick
-		nextTickTime := time.Now().Add(s.conductor.GetTickDuration())
+		// Get timing info for next tick from conductor
+		nextTickTime := s.conductor.GetNextTickTime()
 		tickDuration := s.conductor.GetTickDuration()
 
 		// Collect events from all patterns
 		for _, pattern := range s.patterns {
 			scheduledEvents := pattern.GetScheduledEventsForTick(nextTickTime, tickDuration)
 			for _, scheduled := range scheduledEvents {
-				s.scheduleEvent(scheduled)
+				s.handleEvent(scheduled)
 			}
 		}
 	}
 }
 
-// scheduleEvent schedules a single event to fire at its timestamp
-func (s *Sequencer) scheduleEvent(scheduled events.ScheduledEvent) {
-	time.AfterFunc(time.Until(scheduled.Timing.Timestamp), func() {
-		// Send to adapter
-		if s.adapter != nil {
-			if s.debug {
-				log.Println("Sending message %", scheduled)
-			}
-			if err := s.adapter.Send(scheduled); err != nil {
-				s.handleError(fmt.Sprintf("adapter error: %v", err))
-			}
+// handleEvent sends an event to the adapter and TUI
+// Adapters are responsible for scheduling (e.g., OSC bundles with timestamps)
+func (s *Sequencer) handleEvent(scheduled events.ScheduledEvent) {
+	// Send to adapter (adapter handles timing/scheduling)
+	if s.adapter != nil {
+		if s.debug {
+			log.Println("Sending message %", scheduled)
 		}
+		if err := s.adapter.Send(scheduled); err != nil {
+			s.handleError(fmt.Sprintf("adapter error: %v", err))
+		}
+	}
 
-		// Send event to channel for TUI display
-		if s.eventsChan != nil {
-			select {
-			case s.eventsChan <- scheduled:
-			default:
-				// Don't block if channel is full
-			}
+	// Send event to channel for TUI display
+	if s.eventsChan != nil {
+		select {
+		case s.eventsChan <- scheduled:
+		default:
+			// Don't block if channel is full
 		}
-	})
+	}
 }
 
 // Stop pauses all patterns

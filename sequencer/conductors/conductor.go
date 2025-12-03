@@ -11,6 +11,9 @@ type Conductor interface {
 	// GetTickDuration returns the duration of a single tick
 	GetTickDuration() time.Duration
 
+	// GetNextTickTime returns the absolute wall-clock time of the next tick
+	GetNextTickTime() time.Time
+
 	// Start begins ticking (runs continuously once started)
 	Start()
 

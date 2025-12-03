@@ -128,8 +128,9 @@ func TestSequencer_NewSequencer(t *testing.T) {
 	conductor := conductors.NewCommonTimeConductor(120, 4)
 	adapter := newMockAdapter()
 	pattern := newMockPattern(conductor, 5)
+	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 
 	if seq == nil {
 		t.Fatal("Expected non-nil sequencer")
@@ -144,8 +145,9 @@ func TestSequencer_StartAndPatternExecution(t *testing.T) {
 	conductor := conductors.NewCommonTimeConductor(120, 4)
 	adapter := newMockAdapter()
 	pattern := newMockPattern(conductor, 3) // Generate 3 events
+	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 	seq.Start()
 	seq.Play() // Start playback
 
@@ -176,8 +178,9 @@ func TestSequencer_StopAndPlay(t *testing.T) {
 	conductor := conductors.NewCommonTimeConductor(120, 4)
 	adapter := newMockAdapter()
 	pattern := newMockPattern(conductor, 100) // Lots of events
+	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 	seq.Start()
 	seq.Play() // Start playing
 
@@ -222,8 +225,9 @@ func TestSequencer_MultiplePatterns(t *testing.T) {
 	adapter := newMockAdapter()
 	pattern1 := newMockPattern(conductor, 2)
 	pattern2 := newMockPattern(conductor, 2)
+	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern1, pattern2}, conductor, adapter, false)
+	seq := NewSequencer([]Pattern{pattern1, pattern2}, conductor, adapter, eventChan, false)
 	seq.Start()
 	seq.Play() // Start playback
 
@@ -250,8 +254,9 @@ func TestSequencer_ConductorIntegration(t *testing.T) {
 	conductor := conductors.NewCommonTimeConductor(120, 4)
 	adapter := newMockAdapter()
 	pattern := newMockPattern(conductor, 5)
+	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 	seq.Start()
 	seq.Play()
 
@@ -283,8 +288,9 @@ func TestSequencer_PlayStopPlayCycle(t *testing.T) {
 	conductor := conductors.NewCommonTimeConductor(120, 4)
 	adapter := newMockAdapter()
 	pattern := newMockPattern(conductor, 100)
+	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 	seq.Start()
 
 	// First play cycle
