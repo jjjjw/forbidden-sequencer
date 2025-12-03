@@ -9,48 +9,35 @@ import (
 	"forbidden_sequencer/sequencer/patterns/modulated"
 )
 
-// NewModulatedRhythmSequencer creates a sequencer with modulated timing and gated patterns
+// NewModulatedRhythmSequencer creates a sequencer with simple phrase-based patterns
+// kick and hihat both fire in first half (0-50%)
 // baseTickDuration: base time between ticks (before rate modulation)
 // phraseLength: number of ticks in one phrase
-// adapter: MIDI or other output adapter
+// adapter: output adapter
 // eventChan: channel to send events to
 // debug: debug mode flag
-func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength int, adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent, debug bool) (*Sequencer, *conductors.ModulatedRhythmConductor) {
+func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength int, adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent, debug bool) (*Sequencer, *conductors.PhraseConductor) {
 	// Create phrase conductor
 	phraseConductor := conductors.NewPhraseConductor(baseTickDuration, phraseLength)
 
-	// Create rhythm decision conductor that wraps the phrase conductor
-	conductor := conductors.NewModulatedRhythmConductor(phraseConductor)
+	// Create simple patterns based on phrase position:
+	// - Kick: fires every tick in first half (0-50%)
+	// - Hihat: fires every tick in middle section (25-75%)
 
-	// Create patterns with conditional logic:
-	// - Kick: Markov chain (50% keep playing, 50% start playing), silences after snare
-	// - Snare: fires at 3/4 point, 33% chance per phrase
-	// - Hihat: Markov chain (30% keep playing, 50% start playing), silences after snare
-	//          uses MIDI note 42 (closed hihat)
-	//          each successive hit is delayed exponentially later in the tick
-
-	kickPattern := modulated.NewKickPattern(
+	kickPattern := modulated.NewSimpleKickPattern(
 		phraseConductor,
-		conductor,
 		"kick",
 		36,  // MIDI note (bass drum)
 		0.8, // velocity
 	)
 
-	snarePattern := modulated.NewSnarePattern(
-		conductor,
-		"snare",
-		37,  // MIDI note (snare)
-		0.7, // velocity
-	)
-
-	hihatPattern := modulated.NewHihatPattern(
-		conductor,
+	hihatPattern := modulated.NewSimpleHihatPattern(
+		phraseConductor,
 		"hihat",
 		0.6, // velocity
 	)
 
-	patterns := []Pattern{kickPattern, snarePattern, hihatPattern}
+	patterns := []Pattern{kickPattern, hihatPattern}
 
-	return NewSequencer(patterns, phraseConductor, adapter, eventChan, debug), conductor
+	return NewSequencer(patterns, phraseConductor, adapter, eventChan, debug), phraseConductor
 }

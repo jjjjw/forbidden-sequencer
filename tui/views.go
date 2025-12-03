@@ -125,8 +125,8 @@ func (m Model) viewEventLog() string {
 
 	for i := 0; i < limit; i++ {
 		entry := m.EventLog[i]
-		timestamp := entry.Timestamp.Format("15:04:05.000")
-		rows = append(rows, []string{entry.Name, timestamp})
+		scheduledTime := entry.Timestamp.Format("15:04:05.000")
+		rows = append(rows, []string{entry.Name, scheduledTime})
 	}
 
 	// Create table

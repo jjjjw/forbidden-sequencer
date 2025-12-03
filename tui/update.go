@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"forbidden_sequencer/sequencer/events"
 
@@ -31,8 +32,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		entry := EventLogEntry{
-			Name:      event.Event.Name,
-			Timestamp: event.Timing.Timestamp,
+			Name:         event.Event.Name,
+			ReceivedTime: time.Now(),
+			Timestamp:    event.Timing.Timestamp,
 		}
 		// Prepend to keep newest first
 		m.EventLog = append([]EventLogEntry{entry}, m.EventLog...)

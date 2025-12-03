@@ -10,8 +10,9 @@ import (
 
 // EventLogEntry represents a single event in the event log
 type EventLogEntry struct {
-	Name      string
-	Timestamp time.Time
+	Name         string
+	ReceivedTime time.Time // when the event was logged
+	Timestamp    time.Time // when the event is scheduled to play
 }
 
 // Screen represents the current view

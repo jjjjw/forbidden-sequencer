@@ -47,7 +47,7 @@ func (s *Sequencer) Start() {
 	go s.runTickLoop()
 }
 
-// runTickLoop listens for conductor ticks and schedules events from patterns
+// runTickLoop listens for conductor ticks and handles events from patterns
 func (s *Sequencer) runTickLoop() {
 	for range s.conductor.Ticks() {
 		// Get timing info for next tick from conductor

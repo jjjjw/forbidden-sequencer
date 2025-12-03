@@ -39,7 +39,7 @@ s.waitForBoot({
 
   // OSC message format from Go sequencer (sent as timestamped bundles):
   // /trigger/<eventname> <freq> <velocity> <duration> <c> <d>
-  // SuperCollider automatically schedules the OSCdef callback at the bundle timestamp
+  // Bundle timestamps are used to schedule synths via SystemClock.sched
   // For example:
   // Bundle with timestamp -> /trigger/kick 60.0 0.8 0.3 0.0 0.0
 
@@ -59,7 +59,7 @@ s.waitForBoot({
 
   // OSCdef for bass drum (kick) - monophonic, retriggers
   OSCdef(\kick, { arg msg, time, addr, recvPort;
-    var freq, vel, dur, c, d, amp, len;
+    var freq, vel, dur, c, d, amp, len, schedTime;
 
     freq = msg[1]; // frequency (can use for pitch variations)
     vel = msg[2];  // velocity (0.0-1.0)
@@ -70,14 +70,23 @@ s.waitForBoot({
     amp = vel;
     len = dur;
 
-    // SuperCollider automatically schedules this callback at the bundle timestamp
-    ~kickGroup.freeAll;
-    Synth(\bd, [\freq, 50, \amp, amp, \len, len], ~kickGroup);
+    // Calculate when to schedule relative to server time
+    // time is the bundle timestamp (in OSC time)
+    schedTime = time - Main.elapsedTime;
+    if (schedTime < 0, {
+      "LATE: kick by % seconds".format(schedTime.abs).postln;
+    });
+
+    // Schedule synth at the bundle timestamp
+    SystemClock.sched(schedTime, {
+      ~kickGroup.freeAll;
+      Synth(\bd, [\freq, 50, \amp, amp, \len, len], ~kickGroup);
+    });
   }, '/trigger/kick');
 
   // OSCdef for snare/clap - monophonic, retriggers, routed to reverb bus
   OSCdef(\snare, { arg msg, time, addr, recvPort;
-    var freq, vel, dur, c, d, amp, len;
+    var freq, vel, dur, c, d, amp, len, schedTime;
     freq = msg[1];
     vel = msg[2];
     dur = msg[3];
@@ -87,13 +96,22 @@ s.waitForBoot({
     amp = vel;
     len = dur;
 
-    ~snareGroup.freeAll;
-    Synth(\cp, [\amp, amp, \len, len, \out, ~reverbBus], ~snareGroup);
+    // Calculate when to schedule relative to server time
+    schedTime = time - Main.elapsedTime;
+    if (schedTime < 0, {
+      "LATE: snare by % seconds".format(schedTime.abs).postln;
+    });
+
+    // Schedule synth at the bundle timestamp
+    SystemClock.sched(schedTime, {
+      ~snareGroup.freeAll;
+      Synth(\cp, [\amp, amp, \len, len, \out, ~reverbBus], ~snareGroup);
+    });
   }, '/trigger/snare');
 
   // OSCdef for hihat - monophonic, retriggers
   OSCdef(\hihat, { arg msg, time, addr, recvPort;
-    var freq, vel, dur, c, d, amp, len;
+    var freq, vel, dur, c, d, amp, len, schedTime;
     freq = msg[1];
     vel = msg[2];
     dur = msg[3];
@@ -103,8 +121,17 @@ s.waitForBoot({
     amp = vel;
     len = dur;
 
-    ~hihatGroup.freeAll;
-    Synth(\hh, [\amp, amp, \len, len], ~hihatGroup);
+    // Calculate when to schedule relative to server time
+    schedTime = time - Main.elapsedTime;
+    if (schedTime < 0, {
+      "LATE: hihat by % seconds".format(schedTime.abs).postln;
+    });
+
+    // Schedule synth at the bundle timestamp
+    SystemClock.sched(schedTime, {
+      ~hihatGroup.freeAll;
+      Synth(\hh, [\amp, amp, \len, len], ~hihatGroup);
+    });
   }, '/trigger/hihat');
 
   "OSC responders configured successfully".postln;

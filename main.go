@@ -44,6 +44,7 @@ func initialModel() tui.Model {
 	// Create sequencer factories
 	m.SequencerFactories = []sequencers.SequencerFactory{
 		&sequencers.ModulatedRhythmFactory{},
+		&sequencers.RandRhythmFactory{},
 		&sequencers.ArpFactory{},
 		&sequencers.TechnoFactory{},
 	}

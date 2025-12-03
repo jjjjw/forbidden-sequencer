@@ -12,32 +12,32 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// ModulatedRhythmFactory creates modulated rhythm sequencers
-type ModulatedRhythmFactory struct{}
+// RandRhythmFactory creates randomized rhythm sequencers using Markov chains
+type RandRhythmFactory struct{}
 
 // GetName returns the display name
-func (f *ModulatedRhythmFactory) GetName() string {
-	return "Modulated Rhythm"
+func (f *RandRhythmFactory) GetName() string {
+	return "Rand Rhythm"
 }
 
-// Create creates a new modulated rhythm config instance
-func (f *ModulatedRhythmFactory) Create(adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) SequencerConfig {
-	return NewModulatedRhythmConfig(adapter, eventChan)
+// Create creates a new rand rhythm config instance
+func (f *RandRhythmFactory) Create(adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) SequencerConfig {
+	return NewRandRhythmConfig(adapter, eventChan)
 }
 
-// ModulatedRhythmConfig wraps a modulated rhythm sequencer
-type ModulatedRhythmConfig struct {
+// RandRhythmConfig wraps a randomized rhythm sequencer
+type RandRhythmConfig struct {
 	sequencer   *seqlib.Sequencer
-	conductor   *conductors.PhraseConductor
+	conductor   *conductors.ModulatedRhythmConductor
 	rateChanges chan<- float64
 	currentRate float64
 }
 
-// NewModulatedRhythmConfig creates a new modulated rhythm config
-func NewModulatedRhythmConfig(adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) *ModulatedRhythmConfig {
+// NewRandRhythmConfig creates a new rand rhythm config
+func NewRandRhythmConfig(adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) *RandRhythmConfig {
 	// Create sequencer with default settings
 	// baseTickDuration: 100ms, phraseLength: 16 ticks
-	sequencer, conductor := seqlib.NewModulatedRhythmSequencer(
+	sequencer, conductor := seqlib.NewRandRhythmSequencer(
 		100*time.Millisecond,
 		16,
 		adapter,
@@ -45,7 +45,7 @@ func NewModulatedRhythmConfig(adapter adapters.EventAdapter, eventChan chan<- ev
 		false, // debug
 	)
 
-	return &ModulatedRhythmConfig{
+	return &RandRhythmConfig{
 		sequencer:   sequencer,
 		conductor:   conductor,
 		rateChanges: conductor.RateChanges(),
@@ -54,22 +54,22 @@ func NewModulatedRhythmConfig(adapter adapters.EventAdapter, eventChan chan<- ev
 }
 
 // GetName returns the display name
-func (c *ModulatedRhythmConfig) GetName() string {
-	return "Modulated Rhythm"
+func (c *RandRhythmConfig) GetName() string {
+	return "Rand Rhythm"
 }
 
 // GetKeybindings returns the sequencer-specific controls
-func (c *ModulatedRhythmConfig) GetKeybindings() string {
+func (c *RandRhythmConfig) GetKeybindings() string {
 	return "j/k: adjust rate"
 }
 
 // GetStatus returns the current state
-func (c *ModulatedRhythmConfig) GetStatus() string {
+func (c *RandRhythmConfig) GetStatus() string {
 	return fmt.Sprintf("Rate: %.2fx", c.currentRate)
 }
 
 // HandleInput processes sequencer-specific input
-func (c *ModulatedRhythmConfig) HandleInput(msg tea.KeyMsg) bool {
+func (c *RandRhythmConfig) HandleInput(msg tea.KeyMsg) bool {
 	switch msg.String() {
 	case "up", "k":
 		// Increase rate
@@ -97,16 +97,16 @@ func (c *ModulatedRhythmConfig) HandleInput(msg tea.KeyMsg) bool {
 }
 
 // Start starts the sequencer
-func (c *ModulatedRhythmConfig) Start() {
+func (c *RandRhythmConfig) Start() {
 	c.sequencer.Start()
 }
 
 // Stop stops the sequencer
-func (c *ModulatedRhythmConfig) Stop() {
+func (c *RandRhythmConfig) Stop() {
 	c.sequencer.Stop()
 }
 
 // Play resumes playback
-func (c *ModulatedRhythmConfig) Play() {
+func (c *RandRhythmConfig) Play() {
 	c.sequencer.Play()
 }
