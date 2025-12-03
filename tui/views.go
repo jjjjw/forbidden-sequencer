@@ -165,21 +165,47 @@ func (m Model) viewSettings() string {
 	}
 	b.WriteString("\n")
 
-	// Display OSC adapter configuration
-	if m.OSCAdapter != nil {
-		b.WriteString(StatusStyle.Render("OSC Configuration:"))
+	// Display SuperCollider adapter configuration
+	if m.SCAdapter != nil {
+		b.WriteString(StatusStyle.Render("SuperCollider Configuration:"))
 		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("  Host: %s\n", m.OSCAdapter.GetHost()))
-		b.WriteString(fmt.Sprintf("  Port: %d\n", m.OSCAdapter.GetPort()))
+		b.WriteString(fmt.Sprintf("  Host: %s\n", m.SCAdapter.GetHost()))
+		b.WriteString(fmt.Sprintf("  Port: %d (scsynth)\n", m.SCAdapter.GetPort()))
 		b.WriteString("\n")
 
-		// Display address mappings
-		mappings := m.OSCAdapter.GetAllAddressMappings()
-		if len(mappings) > 0 {
-			b.WriteString(StatusStyle.Render("Address Mappings:"))
+		// Display SynthDef mappings
+		synthDefs := m.SCAdapter.GetAllSynthDefMappings()
+		if len(synthDefs) > 0 {
+			b.WriteString(StatusStyle.Render("SynthDef Mappings:"))
 			b.WriteString("\n")
-			for eventName, address := range mappings {
-				b.WriteString(fmt.Sprintf("  %s → %s\n", eventName, address))
+			for eventName, synthDef := range synthDefs {
+				b.WriteString(fmt.Sprintf("  %s → %s\n", eventName, synthDef))
+			}
+			b.WriteString("\n")
+		}
+
+		// Display Group ID mappings
+		groups := m.SCAdapter.GetAllGroupMappings()
+		if len(groups) > 0 {
+			b.WriteString(StatusStyle.Render("Group IDs:"))
+			b.WriteString("\n")
+			for eventName, groupID := range groups {
+				b.WriteString(fmt.Sprintf("  %s → %d\n", eventName, groupID))
+			}
+			b.WriteString("\n")
+		}
+
+		// Display Bus mappings
+		buses := m.SCAdapter.GetAllBusMappings()
+		if len(buses) > 0 {
+			b.WriteString(StatusStyle.Render("Bus Routing:"))
+			b.WriteString("\n")
+			for eventName, busID := range buses {
+				busName := "master out"
+				if busID != 0 {
+					busName = fmt.Sprintf("bus %d", busID)
+				}
+				b.WriteString(fmt.Sprintf("  %s → %s\n", eventName, busName))
 			}
 		}
 	}

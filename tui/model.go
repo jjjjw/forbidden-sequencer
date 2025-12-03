@@ -30,7 +30,7 @@ type Settings struct {
 
 // Model is the main application state
 type Model struct {
-	OSCAdapter *adapters.OSCAdapter
+	SCAdapter  *adapters.SuperColliderAdapter
 	Settings   *Settings
 	IsPlaying  bool
 	Screen     Screen

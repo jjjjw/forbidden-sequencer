@@ -138,9 +138,9 @@ func (m Model) updateSequencerList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			// Create new sequencer from factory
 			m.ActiveSequencerIndex = m.SelectedSequencerIndex
-			if m.ActiveSequencerIndex < len(m.SequencerFactories) && m.OSCAdapter != nil {
+			if m.ActiveSequencerIndex < len(m.SequencerFactories) && m.SCAdapter != nil {
 				factory := m.SequencerFactories[m.ActiveSequencerIndex]
-				m.ActiveSequencer = factory.Create(m.OSCAdapter, m.EventChan)
+				m.ActiveSequencer = factory.Create(m.SCAdapter, m.EventChan)
 				m.ActiveSequencer.Start()
 				m.IsPlaying = false
 

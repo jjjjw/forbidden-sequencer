@@ -22,8 +22,8 @@ func initialModel() tui.Model {
 		}
 	}
 
-	// Initialize OSC adapter
-	oscAdapter, err := adapters.SetupOSCAdapter()
+	// Initialize SuperCollider adapter
+	scAdapter, err := adapters.SetupSuperColliderAdapter()
 	if err != nil {
 		return tui.Model{
 			Settings: settings,
@@ -33,9 +33,9 @@ func initialModel() tui.Model {
 	}
 
 	m := tui.Model{
-		Settings:   settings,
-		Screen:     tui.ScreenMain,
-		OSCAdapter: oscAdapter,
+		Settings:     settings,
+		Screen:       tui.ScreenMain,
+		SCAdapter:    scAdapter,
 	}
 
 	// Create event channel (owned by model)
@@ -59,10 +59,10 @@ func initialModel() tui.Model {
 	}
 
 	// Create and initialize active sequencer (starts paused)
-	// Use OSC adapter for better timing precision
+	// Use SuperCollider adapter for server-side scheduling
 	if m.ActiveSequencerIndex < len(m.SequencerFactories) {
 		factory := m.SequencerFactories[m.ActiveSequencerIndex]
-		m.ActiveSequencer = factory.Create(oscAdapter, m.EventChan)
+		m.ActiveSequencer = factory.Create(scAdapter, m.EventChan)
 		m.ActiveSequencer.Start()
 	}
 
