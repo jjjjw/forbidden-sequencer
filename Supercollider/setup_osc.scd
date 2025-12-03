@@ -71,14 +71,10 @@ s.waitForBoot({
     len = dur;
 
     // Calculate when to schedule relative to server time
-    // time is the bundle timestamp (in OSC time)
     schedTime = time - Main.elapsedTime;
-    if (schedTime < 0, {
-      "LATE: kick by % seconds".format(schedTime.abs).postln;
-    });
 
-    // Schedule synth at the bundle timestamp
-    SystemClock.sched(schedTime, {
+    // Use server-side scheduling via makeBundle (not SystemClock)
+    s.makeBundle(schedTime, {
       ~kickGroup.freeAll;
       Synth(\bd, [\freq, 50, \amp, amp, \len, len], ~kickGroup);
     });
@@ -98,12 +94,9 @@ s.waitForBoot({
 
     // Calculate when to schedule relative to server time
     schedTime = time - Main.elapsedTime;
-    if (schedTime < 0, {
-      "LATE: snare by % seconds".format(schedTime.abs).postln;
-    });
 
-    // Schedule synth at the bundle timestamp
-    SystemClock.sched(schedTime, {
+    // Use server-side scheduling via makeBundle (not SystemClock)
+    s.makeBundle(schedTime, {
       ~snareGroup.freeAll;
       Synth(\cp, [\amp, amp, \len, len, \out, ~reverbBus], ~snareGroup);
     });
@@ -123,12 +116,9 @@ s.waitForBoot({
 
     // Calculate when to schedule relative to server time
     schedTime = time - Main.elapsedTime;
-    if (schedTime < 0, {
-      "LATE: hihat by % seconds".format(schedTime.abs).postln;
-    });
 
-    // Schedule synth at the bundle timestamp
-    SystemClock.sched(schedTime, {
+    // Use server-side scheduling via makeBundle (not SystemClock)
+    s.makeBundle(schedTime, {
       ~hihatGroup.freeAll;
       Synth(\hh, [\amp, amp, \len, len], ~hihatGroup);
     });
