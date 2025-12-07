@@ -25,14 +25,14 @@ s.waitForBoot({
   });
 
   // Create reverb synth at the tail (processes after sound sources)
-  ~reverb = Synth.tail(s, \allpassReverb, [
+  ~reverb = Synth.tail(s, \fdnReverb, [
     \in, ~reverbBus,
     \out, 0,
     \size, 0.7,
-    \decay, 0.6,
+    \feedback, 0.9,
     \wet, 0.5,
-    \hpass, 150,
-    \lpass, 9000
+    \hpass, 200,
+    \lpass, 16000
   ]);
 
   "Reverb initialized on bus %".format(~reverbBus.index).postln;
