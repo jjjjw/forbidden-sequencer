@@ -10,11 +10,12 @@ import (
 
 // SimpleKickPattern fires kick events in the first half of the phrase (0-50%)
 type SimpleKickPattern struct {
-	conductor *conductors.PhraseConductor
-	name      string  // event name
-	note      uint8   // MIDI note number
-	velocity  float64 // event velocity
-	paused    bool
+	conductor    *conductors.PhraseConductor
+	name         string  // event name
+	note         uint8   // MIDI note number
+	velocity     float64 // event velocity
+	subdivision  int     // number of times to fire per tick
+	paused       bool
 }
 
 // NewSimpleKickPattern creates a new simple kick pattern
@@ -23,13 +24,15 @@ func NewSimpleKickPattern(
 	name string,
 	note uint8,
 	velocity float64,
+	subdivision int,
 ) *SimpleKickPattern {
 	return &SimpleKickPattern{
-		conductor: conductor,
-		name:      name,
-		note:      note,
-		velocity:  velocity,
-		paused:    true,
+		conductor:   conductor,
+		name:        name,
+		note:        note,
+		velocity:    velocity,
+		subdivision: subdivision,
+		paused:      true,
 	}
 }
 
@@ -46,6 +49,11 @@ func (k *SimpleKickPattern) Play() {
 // Stop pauses the pattern
 func (k *SimpleKickPattern) Stop() {
 	k.paused = true
+}
+
+// SetSubdivision updates the subdivision value (how many times per tick to fire)
+func (k *SimpleKickPattern) SetSubdivision(subdivision int) {
+	k.subdivision = subdivision
 }
 
 // String returns a string representation of the pattern
@@ -66,21 +74,32 @@ func (k *SimpleKickPattern) GetScheduledEventsForTick(nextTickTime time.Time, ti
 
 	// Fire if in first half of phrase (0-50%)
 	if float64(nextTickInPhrase) < float64(phraseLength)*0.5 {
-		// Fire event with duration = 75% of tick
-		noteDuration := time.Duration(float64(tickDuration) * 0.75)
+		// Generate events based on subdivision
+		var scheduledEvents []events.ScheduledEvent
 
-		return []events.ScheduledEvent{{
-			Event: events.Event{
-				Name: k.name,
-				Type: events.EventTypeNote,
-				A:    float32(k.note),
-				B:    float32(k.velocity),
-			},
-			Timing: events.Timing{
-				Timestamp: nextTickTime,
-				Duration:  noteDuration,
-			},
-		}}
+		// Calculate time between subdivisions and duration for each note
+		subdivisionDuration := tickDuration / time.Duration(k.subdivision)
+		noteDuration := time.Duration(float64(subdivisionDuration) * 0.75)
+
+		// Create an event for each subdivision
+		for i := 0; i < k.subdivision; i++ {
+			eventTime := nextTickTime.Add(subdivisionDuration * time.Duration(i))
+
+			scheduledEvents = append(scheduledEvents, events.ScheduledEvent{
+				Event: events.Event{
+					Name: k.name,
+					Type: events.EventTypeNote,
+					A:    float32(k.note),
+					B:    float32(k.velocity),
+				},
+				Timing: events.Timing{
+					Timestamp: eventTime,
+					Duration:  noteDuration,
+				},
+			})
+		}
+
+		return scheduledEvents
 	}
 
 	// Outside range - return no events

@@ -10,10 +10,11 @@ import (
 
 // SimpleHihatPattern fires hihat events in the first half of the phrase (0-50%)
 type SimpleHihatPattern struct {
-	conductor *conductors.PhraseConductor
-	name      string  // event name
-	velocity  float64 // event velocity
-	paused    bool
+	conductor    *conductors.PhraseConductor
+	name         string  // event name
+	velocity     float64 // event velocity
+	subdivision  int     // number of times to fire per tick
+	paused       bool
 }
 
 // NewSimpleHihatPattern creates a new simple hihat pattern
@@ -21,12 +22,14 @@ func NewSimpleHihatPattern(
 	conductor *conductors.PhraseConductor,
 	name string,
 	velocity float64,
+	subdivision int,
 ) *SimpleHihatPattern {
 	return &SimpleHihatPattern{
-		conductor: conductor,
-		name:      name,
-		velocity:  velocity,
-		paused:    true,
+		conductor:   conductor,
+		name:        name,
+		velocity:    velocity,
+		subdivision: subdivision,
+		paused:      true,
 	}
 }
 
@@ -43,6 +46,11 @@ func (h *SimpleHihatPattern) Play() {
 // Stop pauses the pattern
 func (h *SimpleHihatPattern) Stop() {
 	h.paused = true
+}
+
+// SetSubdivision updates the subdivision value (how many times per tick to fire)
+func (h *SimpleHihatPattern) SetSubdivision(subdivision int) {
+	h.subdivision = subdivision
 }
 
 // String returns a string representation of the pattern
@@ -66,21 +74,32 @@ func (h *SimpleHihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, t
 		// Always use closed hihat (MIDI note 42)
 		note := uint8(42)
 
-		// Fire event with duration = 75% of tick
-		noteDuration := time.Duration(float64(tickDuration) * 0.75)
+		// Generate events based on subdivision
+		var scheduledEvents []events.ScheduledEvent
 
-		return []events.ScheduledEvent{{
-			Event: events.Event{
-				Name: h.name,
-				Type: events.EventTypeNote,
-				A:    float32(note),
-				B:    float32(h.velocity),
-			},
-			Timing: events.Timing{
-				Timestamp: nextTickTime,
-				Duration:  noteDuration,
-			},
-		}}
+		// Calculate time between subdivisions and duration for each note
+		subdivisionDuration := tickDuration / time.Duration(h.subdivision)
+		noteDuration := time.Duration(float64(subdivisionDuration) * 0.75)
+
+		// Create an event for each subdivision
+		for i := 0; i < h.subdivision; i++ {
+			eventTime := nextTickTime.Add(subdivisionDuration * time.Duration(i))
+
+			scheduledEvents = append(scheduledEvents, events.ScheduledEvent{
+				Event: events.Event{
+					Name: h.name,
+					Type: events.EventTypeNote,
+					A:    float32(note),
+					B:    float32(h.velocity),
+				},
+				Timing: events.Timing{
+					Timestamp: eventTime,
+					Duration:  noteDuration,
+				},
+			})
+		}
+
+		return scheduledEvents
 	}
 
 	// Outside range - return no events
