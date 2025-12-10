@@ -71,9 +71,11 @@ s.waitForBoot({
 (
 SynthDef(\fdnReverb, {
   arg in=0, out=0,
-      size=0.5, feedback=0.9, hpass=200, lpass=16000, wet=0.5;
+      size=0.5, feedback=0.9, hpass=200, lpass=16000, wet=0.5,
+      earlyMix=0.3;  // Mix level for early reflections
 
   var input, dry, snd, processed, wet_sig;
+  var step2, step4;  // Early reflections
   var hadamard;
   var lfo1, lfo2, lfo3, lfo4, lfo5, lfo6, lfo7, lfo8;
 
@@ -99,27 +101,29 @@ SynthDef(\fdnReverb, {
   // DIFFUSION: 4 steps of 8 delays with Hadamard mixing
   // Step 1
   snd = DelayC.ar(snd, 0.05,
-    [0.0051, 0.0053, 0.0059, 0.0061, 0.0067, 0.0071, 0.0073, 0.0079] * size);
+    [0.0020, 0.0039, 0.0060, 0.0081, 0.0104, 0.0131, 0.0154, 0.0185] * size);
   snd = snd * hadamard.flop;
   snd = snd.sum;
 
   // Step 2
   snd = DelayC.ar(snd, 0.05,
-    [0.0083, 0.0089, 0.0097, 0.0101, 0.0103, 0.0107, 0.0109, 0.0113] * size);
+    [0.0216, 0.0239, 0.0272, 0.0296, 0.0315, 0.0329, 0.0375, 0.0396] * size);
   snd = snd * hadamard.flop;
   snd = snd.sum;
+  step2 = snd;  // Capture early reflections from step 2
 
   // Step 3
-  snd = DelayC.ar(snd, 0.05,
-    [0.0127, 0.0131, 0.0137, 0.0139, 0.0149, 0.0151, 0.0157, 0.0163] * size);
+  snd = DelayC.ar(snd, 0.1,
+    [0.0405, 0.0462, 0.0518, 0.0585, 0.0606, 0.0686, 0.0712, 0.0795] * size);
   snd = snd * hadamard.flop;
   snd = snd.sum;
 
   // Step 4
-  snd = DelayC.ar(snd, 0.05,
-    [0.0167, 0.0173, 0.0179, 0.0181, 0.0191, 0.0193, 0.0197, 0.0199] * size);
+  snd = DelayC.ar(snd, 0.2,
+    [0.0873, 0.0974, 0.1022, 0.1113, 0.1231, 0.1366, 0.1449, 0.1539] * size);
   snd = snd * hadamard.flop;
   snd = snd.sum;
+  step4 = snd;  // Capture early reflections from step 4
 
   // FEEDBACK: 8 delays with Hadamard matrix mixing
   snd = snd + LocalIn.ar(8);
@@ -134,10 +138,9 @@ SynthDef(\fdnReverb, {
   lfo7 = SinOsc.kr(0.29) * 0.0005;
   lfo8 = SinOsc.kr(0.31) * 0.0005;
 
-  // Main delay lines: mutually incommensurate values for dense reflections
-  // With subtle, slow modulation (100-200ms range)
+  // Main delay lines
   snd = DelayC.ar(snd, 0.25,
-    ([0.113, 0.127, 0.137, 0.149, 0.157, 0.167, 0.179, 0.191] * size)
+    ([0.1017, 0.1195, 0.1292, 0.1464, 0.1537, 0.1741, 0.1873, 0.1902] * size)
     + [lfo1, lfo2, lfo3, lfo4, lfo5, lfo6, lfo7, lfo8]
     - ControlDur.ir
   );
@@ -157,13 +160,16 @@ SynthDef(\fdnReverb, {
   // Output as stereo with Splay
   processed = Splay.ar(snd);
 
+  // Add early reflections from step 2 and step 4
+  processed = processed + (Splay.ar(step2) * earlyMix) + (Splay.ar(step4) * earlyMix);
+
   // Mix dry and wet
   wet_sig = (dry * (1 - wet)) + (processed * wet);
 
   Out.ar(out, wet_sig);
 }).add;
 
-~recreateReverb.(size: 0.9, feedback: 0.9);
+~recreateReverb.(size: 0.7, feedback: 0.98);
 )
 
 // Trigger clap (routed to reverb bus 10)
