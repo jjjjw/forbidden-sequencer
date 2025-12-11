@@ -68,6 +68,55 @@ s.waitForBoot({
   "Sandbox setup complete - use ~recreateReverb.value() to test".postln;
 });
 
+// Pre-compute Hadamard normalization factor (only calculated once)
+~hadamardScale8 = (1/8).sqrt;
+
+// Fast Hadamard Transform for 8 channels
+// More efficient than matrix multiplication: O(n log n) vs O(n²)
+~fastHadamard8 = {
+  arg signals;
+  var temp;
+
+  // Stage 1: 8 -> 4 blocks
+  temp = [
+    signals[0] + signals[4],
+    signals[1] + signals[5],
+    signals[2] + signals[6],
+    signals[3] + signals[7],
+    signals[0] - signals[4],
+    signals[1] - signals[5],
+    signals[2] - signals[6],
+    signals[3] - signals[7]
+  ];
+
+  // Stage 2: 4 -> 2 blocks
+  temp = [
+    temp[0] + temp[2],
+    temp[1] + temp[3],
+    temp[0] - temp[2],
+    temp[1] - temp[3],
+    temp[4] + temp[6],
+    temp[5] + temp[7],
+    temp[4] - temp[6],
+    temp[5] - temp[7]
+  ];
+
+  // Stage 3: 2 -> 1 blocks (final butterfly)
+  temp = [
+    temp[0] + temp[1],
+    temp[0] - temp[1],
+    temp[2] + temp[3],
+    temp[2] - temp[3],
+    temp[4] + temp[5],
+    temp[4] - temp[5],
+    temp[6] + temp[7],
+    temp[6] - temp[7]
+  ];
+
+  // Apply normalization for energy conservation
+  temp * ~hadamardScale8;
+};
+
 (
 SynthDef(\fdnReverb, {
   arg in=0, out=0,
@@ -76,20 +125,7 @@ SynthDef(\fdnReverb, {
 
   var input, dry, snd, processed, wet_sig;
   var step2, step4;  // Early reflections
-  var hadamard;
   var lfo1, lfo2, lfo3, lfo4, lfo5, lfo6, lfo7, lfo8;
-
-  // 8x8 Hadamard matrix (normalized by 1/sqrt(8) ≈ 0.35355)
-  hadamard = [
-    [ 1,  1,  1,  1,  1,  1,  1,  1],
-    [ 1, -1,  1, -1,  1, -1,  1, -1],
-    [ 1,  1, -1, -1,  1,  1, -1, -1],
-    [ 1, -1, -1,  1,  1, -1, -1,  1],
-    [ 1,  1,  1,  1, -1, -1, -1, -1],
-    [ 1, -1,  1, -1, -1,  1, -1,  1],
-    [ 1,  1, -1, -1, -1, -1,  1,  1],
-    [ 1, -1, -1,  1, -1,  1,  1, -1]
-  ] * (1/8).sqrt;
 
   // Input (stereo)
   input = In.ar(in, 2);
@@ -102,27 +138,23 @@ SynthDef(\fdnReverb, {
   // Step 1
   snd = DelayC.ar(snd, 0.05,
     [0.0020, 0.0039, 0.0060, 0.0081, 0.0104, 0.0131, 0.0154, 0.0185] * size);
-  snd = snd * hadamard.flop;
-  snd = snd.sum;
+  snd = ~fastHadamard8.value(snd);
 
   // Step 2
   snd = DelayC.ar(snd, 0.05,
     [0.0216, 0.0239, 0.0272, 0.0296, 0.0315, 0.0329, 0.0375, 0.0396] * size);
-  snd = snd * hadamard.flop;
-  snd = snd.sum;
+  snd = ~fastHadamard8.value(snd);
   step2 = snd;  // Capture early reflections from step 2
 
   // Step 3
   snd = DelayC.ar(snd, 0.1,
     [0.0405, 0.0462, 0.0518, 0.0585, 0.0606, 0.0686, 0.0712, 0.0795] * size);
-  snd = snd * hadamard.flop;
-  snd = snd.sum;
+  snd = ~fastHadamard8.value(snd);
 
   // Step 4
   snd = DelayC.ar(snd, 0.2,
     [0.0873, 0.0974, 0.1022, 0.1113, 0.1231, 0.1366, 0.1449, 0.1539] * size);
-  snd = snd * hadamard.flop;
-  snd = snd.sum;
+  snd = ~fastHadamard8.value(snd);
   step4 = snd;  // Capture early reflections from step 4
 
   // FEEDBACK: 8 delays with Hadamard matrix mixing
@@ -151,9 +183,8 @@ SynthDef(\fdnReverb, {
   snd = HPF.ar(snd, hpass);
   snd = LPF.ar(snd, lpass);
 
-  // Apply Hadamard matrix for feedback mixing
-  snd = snd * hadamard.flop;
-  snd = snd.sum;
+  // Apply Hadamard transform for feedback mixing
+  snd = ~fastHadamard8.value(snd);
 
   LocalOut.ar(snd);
 
