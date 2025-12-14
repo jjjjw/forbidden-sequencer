@@ -2,21 +2,34 @@ package adapters
 
 import (
 	"fmt"
+	"log"
+	"math"
+	"os"
 
 	"forbidden_sequencer/sequencer/events"
 
 	"github.com/hypebeast/go-osc/osc"
 )
 
+// ParameterMapping maps event parameters (A, B, C, D) to synth control names
+type ParameterMapping struct {
+	A string // maps Event.A to this control name
+	B string // maps Event.B to this control name
+	C string // maps Event.C to this control name
+	D string // maps Event.D to this control name
+}
+
 // SuperColliderAdapter implements EventAdapter for SuperCollider server commands
 // Sends OSC messages directly to scsynth (port 57110) using server command protocol
 type SuperColliderAdapter struct {
-	client          *osc.Client
-	host            string
-	port            int
-	synthDefMapping map[string]string // maps event names to SynthDef names
-	groupIDMapping  map[string]int32  // maps event names to Group IDs
-	busIDMapping    map[string]int32  // maps event names to output bus IDs
+	client           *osc.Client
+	host             string
+	port             int
+	synthDefMapping  map[string]string           // maps event names to SynthDef names
+	groupIDMapping   map[string]int32            // maps event names to Group IDs
+	busIDMapping     map[string]int32            // maps event names to output bus IDs
+	parameterMapping map[string]ParameterMapping // maps event names to parameter mappings
+	debugLog         *log.Logger                 // debug logger for OSC messages
 }
 
 // NewSuperColliderAdapter creates a new SuperCollider adapter
@@ -25,13 +38,22 @@ type SuperColliderAdapter struct {
 func NewSuperColliderAdapter(host string, port int) (*SuperColliderAdapter, error) {
 	client := osc.NewClient(host, port)
 
+	// Create debug log file
+	debugFile, err := os.Create("debug/sc_adapter_osc.log")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create debug log: %w", err)
+	}
+	debugLogger := log.New(debugFile, "", log.LstdFlags|log.Lmicroseconds)
+
 	return &SuperColliderAdapter{
-		client:          client,
-		host:            host,
-		port:            port,
-		synthDefMapping: make(map[string]string),
-		groupIDMapping:  make(map[string]int32),
-		busIDMapping:    make(map[string]int32),
+		client:           client,
+		host:             host,
+		port:             port,
+		synthDefMapping:  make(map[string]string),
+		groupIDMapping:   make(map[string]int32),
+		busIDMapping:     make(map[string]int32),
+		parameterMapping: make(map[string]ParameterMapping),
+		debugLog:         debugLogger,
 	}, nil
 }
 
@@ -52,6 +74,12 @@ func (sc *SuperColliderAdapter) SetGroupID(eventName string, groupID int32) {
 // Default is 0 (master out) if not set
 func (sc *SuperColliderAdapter) SetBusID(eventName string, busID int32) {
 	sc.busIDMapping[eventName] = busID
+}
+
+// SetParameterMapping sets the parameter mapping for a given event name
+// For example: SetParameterMapping("kick", ParameterMapping{A: "freq", B: "amp", C: "ratio", D: "sweep"})
+func (sc *SuperColliderAdapter) SetParameterMapping(eventName string, mapping ParameterMapping) {
+	sc.parameterMapping[eventName] = mapping
 }
 
 // GetSynthDefName returns the SynthDef name for a given event name
@@ -118,6 +146,29 @@ func (sc *SuperColliderAdapter) GetAllBusMappings() map[string]int32 {
 	return result
 }
 
+// GetAllParameterMappings returns all parameter mappings
+func (sc *SuperColliderAdapter) GetAllParameterMappings() map[string]ParameterMapping {
+	result := make(map[string]ParameterMapping)
+	for k, v := range sc.parameterMapping {
+		result[k] = v
+	}
+	return result
+}
+
+// GetParameterMapping returns the parameter mapping for a given event name
+func (sc *SuperColliderAdapter) GetParameterMapping(eventName string) ParameterMapping {
+	if mapping, ok := sc.parameterMapping[eventName]; ok {
+		return mapping
+	}
+	// Default mapping
+	return ParameterMapping{A: "freq", B: "amp", C: "", D: ""}
+}
+
+// midiToFreq converts MIDI note number to frequency in Hz
+func midiToFreq(midiNote float32) float32 {
+	return float32(440.0 * math.Pow(2.0, (float64(midiNote)-69.0)/12.0))
+}
+
 // Send implements EventAdapter.Send
 // Sends server commands directly to scsynth using timestamped bundles
 func (sc *SuperColliderAdapter) Send(scheduled events.ScheduledEvent) error {
@@ -139,10 +190,11 @@ func (sc *SuperColliderAdapter) sendNote(scheduled events.ScheduledEvent) error 
 	event := scheduled.Event
 	timing := scheduled.Timing
 
-	// Get synthdef name, group ID, and output bus
+	// Get synthdef name, group ID, output bus, and parameter mapping
 	synthDefName := sc.GetSynthDefName(event.Name)
 	groupID := sc.GetGroupID(event.Name)
 	outputBus := sc.GetBusID(event.Name)
+	paramMapping := sc.GetParameterMapping(event.Name)
 
 	// Message 1: /g_freeAll - free all synths in the group (monophonic retrigger)
 	freeAllMsg := osc.NewMessage("/g_freeAll")
@@ -154,16 +206,51 @@ func (sc *SuperColliderAdapter) sendNote(scheduled events.ScheduledEvent) error 
 	// addAction: 1 (add to tail of group)
 	// targetID: groupID
 	newSynthMsg := osc.NewMessage("/s_new")
-	newSynthMsg.Append(synthDefName)                        // synthdef name
-	newSynthMsg.Append(int32(-1))                           // nodeID (-1 = auto-generate)
-	newSynthMsg.Append(int32(1))                            // addAction (1 = tail)
-	newSynthMsg.Append(groupID)                             // target group ID
-	newSynthMsg.Append("amp")                               // control name
-	newSynthMsg.Append(event.B)                             // velocity (amp)
-	newSynthMsg.Append("len")                               // control name
-	newSynthMsg.Append(float32(timing.Duration.Seconds()))  // duration
-	newSynthMsg.Append("out")                               // control name
-	newSynthMsg.Append(outputBus)                           // output bus
+	newSynthMsg.Append(synthDefName)  // synthdef name
+	newSynthMsg.Append(int32(-1))     // nodeID (-1 = auto-generate)
+	newSynthMsg.Append(int32(1))      // addAction (1 = tail)
+	newSynthMsg.Append(groupID)       // target group ID
+
+	// Add parameters based on mapping
+	if paramMapping.A != "" {
+		newSynthMsg.Append(paramMapping.A)
+		// If parameter is "freq", convert MIDI note to frequency
+		if paramMapping.A == "freq" {
+			newSynthMsg.Append(midiToFreq(event.A))
+		} else {
+			newSynthMsg.Append(event.A)
+		}
+	}
+	if paramMapping.B != "" {
+		newSynthMsg.Append(paramMapping.B)
+		newSynthMsg.Append(event.B)
+	}
+	if paramMapping.C != "" {
+		newSynthMsg.Append(paramMapping.C)
+		newSynthMsg.Append(event.C)
+	}
+	if paramMapping.D != "" {
+		newSynthMsg.Append(paramMapping.D)
+		newSynthMsg.Append(event.D)
+	}
+
+	// Always add len and out
+	newSynthMsg.Append("len")
+	newSynthMsg.Append(float32(timing.Duration.Seconds()))
+	newSynthMsg.Append("out")
+	newSynthMsg.Append(outputBus)
+
+	// Debug log the message
+	if sc.debugLog != nil {
+		sc.debugLog.Printf("Event: %s -> SynthDef: %s, Group: %d, Bus: %d", event.Name, synthDefName, groupID, outputBus)
+		sc.debugLog.Printf("  Param mapping: A=%s, B=%s, C=%s, D=%s", paramMapping.A, paramMapping.B, paramMapping.C, paramMapping.D)
+		if paramMapping.A == "freq" {
+			sc.debugLog.Printf("  Param values: A=%v (MIDI) -> %v Hz, B=%v, C=%v, D=%v", event.A, midiToFreq(event.A), event.B, event.C, event.D)
+		} else {
+			sc.debugLog.Printf("  Param values: A=%v, B=%v, C=%v, D=%v", event.A, event.B, event.C, event.D)
+		}
+		sc.debugLog.Printf("  len=%v, out=%v", timing.Duration.Seconds(), outputBus)
+	}
 
 	// Create bundle with both messages and timestamp
 	bundle := osc.NewBundle(timing.Timestamp)

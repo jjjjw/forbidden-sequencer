@@ -7,9 +7,8 @@ This folder contains SuperCollider SynthDefs and setup scripts for the Forbidden
 The sequencer sends events to SuperCollider via **direct server commands** (OSC protocol):
 
 - Go → **scsynth** (port 57110) using `/g_freeAll` and `/s_new` commands
-- **Server-side scheduling** with timestamped OSC bundles for sample-accurate timing
+- **Server-side scheduling** with timestamped OSC bundles
 - **Monophonic voices** via Groups: each event frees the group then creates new synth
-- No language-side (sclang) scheduling overhead
 
 ### Event Flow
 
@@ -29,6 +28,8 @@ scsynth (port 57110)
 | kick  | bd       | 100      | 0 (master out) |
 | snare | cp       | 101      | 10 (reverb) |
 | hihat | hh       | 102      | 0 (master out) |
+| fm1   | fm2op    | 103      | 10 (reverb) |
+| fm2   | fm2op    | 104      | 10 (reverb) |
 
 ## Setup
 
@@ -59,7 +60,7 @@ SuperCollider server will listen on port **57110** (default scsynth port) for di
 
 ## Files
 
-- **synthdefs.scd** - SynthDef definitions for bd, cp, hh, and reverb
+- **synthdefs.scd** - SynthDef definitions for bd, cp, hh, fm2op, and fdnReverb
 - **setup.scd** - Initialize Groups, audio buses, and reverb
 - **README.md** - This file
 
@@ -77,10 +78,15 @@ SuperCollider server will listen on port **57110** (default scsynth port) for di
 - Bandpass filtered noise burst
 - Parameters: `len`, `amp`, `out`
 
-### `\allpassReverb` (Reverb Effect)
-- Allpass reverb with modulated delay times
+### `\fm2op` (2-Operator FM Synth)
+- Two-operator frequency modulation synthesis
+- Modulator frequency is a ratio of the carrier frequency
+- Parameters: `freq`, `amp`, `len`, `out`, `modRatio` (0.5-7.0), `modIndex` (0.1-3.0)
+
+### `\fdnReverb` (FDN Reverb Effect)
+- Feedback Delay Network reverb with Hadamard matrix diffusion
 - Routes from bus 10 to master out (bus 0)
-- Parameters: `size`, `decay`, `wet`, `hpass`, `lpass`
+- Parameters: `in`, `out`, `size`, `feedback`, `wet`, `hpass`, `lpass`, `earlyMix`
 
 ## Architecture Details
 
@@ -89,6 +95,8 @@ Groups are created with fixed IDs in `setup.scd`:
 - `~kickGroup` = 100
 - `~snareGroup` = 101
 - `~hihatGroup` = 102
+- `~fm1Group` = 103
+- `~fm2Group` = 104
 
 These IDs must match the mappings in Go (`sequencer/adapters/setup.go`).
 
@@ -97,6 +105,23 @@ These IDs must match the mappings in Go (`sequencer/adapters/setup.go`).
 - **Bus 10** - Reverb input (2 channels)
 
 The reverb synth processes audio from bus 10 and outputs to bus 0.
+
+### Node Tree Execution Order
+
+SuperCollider executes nodes in the order they appear in the node tree. For the reverb to process audio from bus 10, voice groups **must execute before** the reverb synth.
+
+**Required node tree structure:**
+```
+Group 0 (RootNode)
+  ├── 100 (kick group)    ← executes first
+  ├── 101 (snare group)   ← executes second
+  ├── 102 (hihat group)   ← executes third
+  ├── 103 (fm1 group)     ← executes fourth
+  ├── 104 (fm2 group)     ← executes fifth
+  └── 1000 (fdnReverb)    ← executes LAST (reads from bus 10)
+```
+
+Run `s.queryAllNodes` in SuperCollider to verify the node tree structure matches the above.
 
 ### Server Commands
 

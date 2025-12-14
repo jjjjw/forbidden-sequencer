@@ -18,7 +18,7 @@ type ModulatedRhythmFactory struct{}
 
 // GetName returns the display name
 func (f *ModulatedRhythmFactory) GetName() string {
-	return "Modulated Rhythm"
+	return "Ramp Time"
 }
 
 // Create creates a new modulated rhythm config instance

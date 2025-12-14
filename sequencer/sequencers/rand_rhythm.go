@@ -6,6 +6,7 @@ import (
 	"forbidden_sequencer/sequencer/adapters"
 	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
+	"forbidden_sequencer/sequencer/lib"
 	randpatterns "forbidden_sequencer/sequencer/patterns/rand"
 )
 
@@ -50,7 +51,27 @@ func NewRandRhythmSequencer(baseTickDuration time.Duration, phraseLength int, ad
 		0.6, // velocity
 	)
 
-	patterns := []Pattern{kickPattern, snarePattern, hihatPattern}
+	// FM voice 1: melodic minor scale, middle register
+	fm1Pattern := randpatterns.NewFMPattern(
+		"fm1",
+		0.5,                   // velocity
+		60,                    // root note (C4)
+		lib.MelodicMinorScale, // melodic minor scale
+		2,                     // 2 octave range
+		43,                    // random seed
+	)
+
+	// FM voice 2: melodic minor scale, higher register
+	fm2Pattern := randpatterns.NewFMPattern(
+		"fm2",
+		0.4,                   // velocity (slightly quieter)
+		72,                    // root note (C5, one octave up)
+		lib.MelodicMinorScale, // melodic minor scale
+		2,                     // 2 octave range
+		84,                    // random seed (different from fm1)
+	)
+
+	patterns := []Pattern{kickPattern, snarePattern, hihatPattern, fm1Pattern, fm2Pattern}
 
 	return NewSequencer(patterns, phraseConductor, adapter, eventChan, debug), conductor
 }

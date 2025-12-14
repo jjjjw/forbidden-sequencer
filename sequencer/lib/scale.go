@@ -10,6 +10,9 @@ var (
 
 	// MinorScale: whole, half, whole, whole, half, whole, whole (natural minor)
 	MinorScale = Scale{0, 2, 3, 5, 7, 8, 10}
+
+	// MelodicMinorScale: whole, half, whole, whole, whole, whole, half (ascending melodic minor)
+	MelodicMinorScale = Scale{0, 2, 3, 5, 7, 9, 11}
 )
 
 // NoteAt returns the MIDI note number for a given scale degree

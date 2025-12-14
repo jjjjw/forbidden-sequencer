@@ -207,6 +207,32 @@ func (m Model) viewSettings() string {
 				}
 				b.WriteString(fmt.Sprintf("  %s → %s\n", eventName, busName))
 			}
+			b.WriteString("\n")
+		}
+
+		// Display Parameter mappings
+		params := m.SCAdapter.GetAllParameterMappings()
+		if len(params) > 0 {
+			b.WriteString(StatusStyle.Render("Parameter Mappings:"))
+			b.WriteString("\n")
+			for eventName, mapping := range params {
+				var mappings []string
+				if mapping.A != "" {
+					mappings = append(mappings, fmt.Sprintf("A→%s", mapping.A))
+				}
+				if mapping.B != "" {
+					mappings = append(mappings, fmt.Sprintf("B→%s", mapping.B))
+				}
+				if mapping.C != "" {
+					mappings = append(mappings, fmt.Sprintf("C→%s", mapping.C))
+				}
+				if mapping.D != "" {
+					mappings = append(mappings, fmt.Sprintf("D→%s", mapping.D))
+				}
+				if len(mappings) > 0 {
+					b.WriteString(fmt.Sprintf("  %s: %s\n", eventName, strings.Join(mappings, ", ")))
+				}
+			}
 		}
 	}
 

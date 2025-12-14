@@ -131,4 +131,27 @@ SynthDef(\bd, {
   Out.ar(out, sig ! 2);
 }).add;
 
+// SynthDef for 2-operator FM synthesis (fm2op)
+SynthDef(\fm2op, {
+  arg freq = 440, amp = 1, len = 1, out = 0, modRatio = 2.0, modIndex = 1.0;
+  var carrier, modulator, modFreq, env, sig;
+
+  // Modulator frequency (ratio relative to carrier)
+  modFreq = freq * modRatio;
+
+  // Amplitude envelope (percussive)
+  env = EnvGen.kr(Env.perc(0.001, len - 0.001), doneAction: Done.freeSelf);
+
+  // Modulator: sine wave scaled by modulation index
+  modulator = SinOsc.ar(modFreq) * modFreq * modIndex;
+
+  // Carrier: frequency modulated by the modulator
+  carrier = SinOsc.ar(freq + modulator);
+
+  // Apply envelope and amplitude
+  sig = carrier * env * amp;
+
+  Out.ar(out, sig ! 2);
+}).add;
+
 "SynthDefs loaded successfully".postln;

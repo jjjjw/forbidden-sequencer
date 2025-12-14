@@ -17,7 +17,7 @@ type RandRhythmFactory struct{}
 
 // GetName returns the display name
 func (f *RandRhythmFactory) GetName() string {
-	return "Rand Rhythm"
+	return "Markov"
 }
 
 // Create creates a new rand rhythm config instance
@@ -55,7 +55,7 @@ func NewRandRhythmConfig(adapter adapters.EventAdapter, eventChan chan<- events.
 
 // GetName returns the display name
 func (c *RandRhythmConfig) GetName() string {
-	return "Rand Rhythm"
+	return "Markov"
 }
 
 // GetKeybindings returns the sequencer-specific controls
