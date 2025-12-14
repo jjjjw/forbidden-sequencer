@@ -47,6 +47,7 @@ s.waitForBoot({
   s.sendMsg('/g_new', 102, 2, 1000); // hihat group - before reverb
   s.sendMsg('/g_new', 103, 2, 1000); // fm1 group - before reverb
   s.sendMsg('/g_new', 104, 2, 1000); // fm2 group - before reverb
+  s.sendMsg('/g_new', 105, 2, 1000); // arp group - before reverb
 
   "Reverb initialized on bus %".format(~reverbBus.index).postln;
 
@@ -56,6 +57,7 @@ s.waitForBoot({
   "  Hihat group: 102".postln;
   "  FM1 group: 103".postln;
   "  FM2 group: 104".postln;
+  "  Arp group: 105".postln;
 
   // Server is now ready to receive commands on port 57110
   // Go adapter will send timestamped bundles containing:
@@ -68,6 +70,7 @@ s.waitForBoot({
   //   hihat -> hh (hihat)
   //   fm1   -> fm2op (2-op FM synth)
   //   fm2   -> fm2op (2-op FM synth)
+  //   arp   -> arp (detuned squares)
   //
   // Group ID mappings (set in Go):
   //   kick  -> 100
@@ -75,6 +78,7 @@ s.waitForBoot({
   //   hihat -> 102
   //   fm1   -> 103
   //   fm2   -> 104
+  //   arp   -> 105
   //
   // Bus ID mappings (set in Go):
   //   kick  -> 0 (master out)
@@ -82,6 +86,7 @@ s.waitForBoot({
   //   hihat -> 0 (master out)
   //   fm1   -> 10 (reverb bus)
   //   fm2   -> 10 (reverb bus)
+  //   arp   -> 10 (reverb bus)
 
   "SuperCollider setup complete".postln;
   "Server listening on port 57110 for direct server commands".postln;

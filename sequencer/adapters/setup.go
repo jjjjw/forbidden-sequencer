@@ -34,6 +34,7 @@ func SetupSuperColliderAdapter(debug bool) (*SuperColliderAdapter, error) {
 	scAdapter.SetSynthDefMapping("hihat", "hh")
 	scAdapter.SetSynthDefMapping("fm1", "fm2op")
 	scAdapter.SetSynthDefMapping("fm2", "fm2op")
+	scAdapter.SetSynthDefMapping("arp", "arp")
 
 	// Set Group ID mappings (event name -> Group ID)
 	// These must match the group IDs created in Supercollider/setup.scd
@@ -42,13 +43,15 @@ func SetupSuperColliderAdapter(debug bool) (*SuperColliderAdapter, error) {
 	scAdapter.SetGroupID("hihat", 102)
 	scAdapter.SetGroupID("fm1", 103)
 	scAdapter.SetGroupID("fm2", 104)
+	scAdapter.SetGroupID("arp", 105)
 
 	// Set Bus ID mappings (event name -> output bus)
 	// Bus 0 = master out (default)
-	// Bus 10 = reverb bus (for snare/clap and FM voices)
+	// Bus 10 = reverb bus (for snare/clap, FM voices, and arp)
 	scAdapter.SetBusID("snare", 10) // route snare to reverb
 	scAdapter.SetBusID("fm1", 10)   // route fm1 to reverb
 	scAdapter.SetBusID("fm2", 10)   // route fm2 to reverb
+	scAdapter.SetBusID("arp", 10)   // route arp to reverb
 	// kick and hihat use default (bus 0)
 
 	return scAdapter, nil

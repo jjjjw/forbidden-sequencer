@@ -150,4 +150,27 @@ SynthDef(\fm2op, {
   Out.ar(out, sig ! 2);
 }).add;
 
+// SynthDef for arpeggiator (arp) - single pulse through lowpass
+SynthDef(\arp, {
+  arg freq = 440, amp = 1, len = 1, out = 0, cutoff = 2000, res = 0.5;
+  var sig, env, filterEnv;
+
+  // Amplitude envelope (percussive with short attack)
+  env = EnvGen.kr(Env.perc(0.01, len - 0.01), doneAction: Done.freeSelf);
+
+  // Filter envelope (sweeps cutoff for classic arp sound)
+  filterEnv = EnvGen.kr(Env.perc(0.01, len * 0.3));
+
+  // Single pulse wave
+  sig = Pulse.ar(freq, 0.5);
+
+  // Lowpass filter with envelope modulation
+  sig = RLPF.ar(sig, cutoff * (1 + (filterEnv * 2)), res);
+
+  // Apply amplitude envelope
+  sig = sig * env * amp;
+
+  Out.ar(out, sig ! 2);
+}).add;
+
 "SynthDefs loaded successfully".postln;
