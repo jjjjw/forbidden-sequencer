@@ -63,7 +63,7 @@ func NewModulatedRhythmConfig(adapter adapters.EventAdapter, eventChan chan<- ev
 
 // GetName returns the display name
 func (c *ModulatedRhythmConfig) GetName() string {
-	return "Modulated Rhythm"
+	return "Ramp Time"
 }
 
 // GetKeybindings returns the sequencer-specific controls
