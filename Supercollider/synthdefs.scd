@@ -12,7 +12,7 @@ SynthDef(\fdnReverb, {
   var hadamard;
   var lfo1, lfo2, lfo3, lfo4, lfo5, lfo6, lfo7, lfo8;
 
-  // 8x8 Hadamard matrix (normalized by 1/sqrt(8) ≈ 0.35355)
+  // 8x8 Hadamard matrix (normalized by 1/sqrt(8))
   hadamard = [
     [ 1,  1,  1,  1,  1,  1,  1,  1],
     [ 1, -1,  1, -1,  1, -1,  1, -1],
