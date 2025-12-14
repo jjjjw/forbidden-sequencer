@@ -48,7 +48,6 @@ func NewArpConfig(adapter adapters.EventAdapter, eventChan chan<- events.Schedul
 		60,      // root note (middle C)
 		adapter,
 		eventChan,
-		false, // debug
 	)
 
 	return &ArpConfig{

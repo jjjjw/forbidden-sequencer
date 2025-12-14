@@ -47,7 +47,6 @@ func NewModulatedRhythmConfig(adapter adapters.EventAdapter, eventChan chan<- ev
 		16,
 		adapter,
 		eventChan,
-		false, // debug
 	)
 
 	return &ModulatedRhythmConfig{

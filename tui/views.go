@@ -165,6 +165,14 @@ func (m Model) viewSettings() string {
 	}
 	b.WriteString("\n")
 
+	// Display debug status
+	debugStatus := "disabled"
+	if m.Debug {
+		debugStatus = "enabled"
+	}
+	b.WriteString(fmt.Sprintf("Debug Logging: %s\n", debugStatus))
+	b.WriteString("\n")
+
 	// Display SuperCollider adapter configuration
 	if m.SCAdapter != nil {
 		b.WriteString(StatusStyle.Render("SuperCollider Configuration:"))

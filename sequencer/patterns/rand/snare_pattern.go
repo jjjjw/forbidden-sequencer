@@ -12,7 +12,6 @@ import (
 type SnarePattern struct {
 	conductor *conductors.ModulatedRhythmConductor
 	name      string  // event name
-	note      uint8   // MIDI note number (37 for snare)
 	velocity  float64 // event velocity
 	paused    bool
 }
@@ -21,13 +20,11 @@ type SnarePattern struct {
 func NewSnarePattern(
 	conductor *conductors.ModulatedRhythmConductor,
 	name string,
-	note uint8,
 	velocity float64,
 ) *SnarePattern {
 	return &SnarePattern{
 		conductor: conductor,
 		name:      name,
-		note:      note,
 		velocity:  velocity,
 		paused:    true,
 	}
@@ -73,7 +70,7 @@ func (s *SnarePattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 			Event: events.Event{
 				Name: s.name,
 				Type: events.EventTypeNote,
-				A:    float32(s.note),
+				A:    0, // snare doesn't use pitch
 				B:    float32(s.velocity),
 			},
 			Timing: events.Timing{

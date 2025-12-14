@@ -15,9 +15,8 @@ import (
 // phraseLength: number of ticks in one phrase
 // adapter: output adapter
 // eventChan: channel to send events to
-// debug: debug mode flag
 // Returns: sequencer, conductor, kickPattern, hihatPattern
-func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength int, adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent, debug bool) (*Sequencer, *conductors.PhraseConductor, *modulated.SimpleKickPattern, *modulated.SimpleHihatPattern) {
+func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength int, adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) (*Sequencer, *conductors.PhraseConductor, *modulated.SimpleKickPattern, *modulated.SimpleHihatPattern) {
 	// Create phrase conductor
 	phraseConductor := conductors.NewPhraseConductor(baseTickDuration, phraseLength)
 
@@ -42,5 +41,5 @@ func NewModulatedRhythmSequencer(baseTickDuration time.Duration, phraseLength in
 
 	patterns := []Pattern{kickPattern, hihatPattern}
 
-	return NewSequencer(patterns, phraseConductor, adapter, eventChan, debug), phraseConductor, kickPattern, hihatPattern
+	return NewSequencer(patterns, phraseConductor, adapter, eventChan), phraseConductor, kickPattern, hihatPattern
 }

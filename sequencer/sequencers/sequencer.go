@@ -2,7 +2,6 @@ package sequencers
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"forbidden_sequencer/sequencer/adapters"
@@ -23,18 +22,16 @@ type Sequencer struct {
 	patterns   []Pattern
 	adapter    adapters.EventAdapter
 	conductor  conductors.Conductor
-	debug      bool
 	eventsChan chan<- events.ScheduledEvent
 }
 
 // NewSequencer creates a new sequencer with the given patterns, conductor, and adapter
-func NewSequencer(patterns []Pattern, conductor conductors.Conductor, adapter adapters.EventAdapter, eventsChan chan<- events.ScheduledEvent, debug bool) *Sequencer {
+func NewSequencer(patterns []Pattern, conductor conductors.Conductor, adapter adapters.EventAdapter, eventsChan chan<- events.ScheduledEvent) *Sequencer {
 	return &Sequencer{
 		patterns:   patterns,
 		conductor:  conductor,
 		adapter:    adapter,
 		eventsChan: eventsChan,
-		debug:      debug,
 	}
 }
 
@@ -69,11 +66,9 @@ func (s *Sequencer) runTickLoop() {
 func (s *Sequencer) handleEvent(scheduled events.ScheduledEvent) {
 	// Send to adapter (adapter handles timing/scheduling)
 	if s.adapter != nil {
-		if s.debug {
-			log.Println("Sending message %", scheduled)
-		}
 		if err := s.adapter.Send(scheduled); err != nil {
-			s.handleError(fmt.Sprintf("adapter error: %v", err))
+			// Log error but don't stop playback
+			fmt.Printf("adapter error: %v\n", err)
 		}
 	}
 
@@ -108,17 +103,6 @@ func (s *Sequencer) Reset() {
 	}
 }
 
-// handleError handles errors based on debug mode
-func (s *Sequencer) handleError(msg string) {
-	if s.debug {
-		// Debug mode: log and panic with stack
-		log.Panic(msg)
-	} else {
-		// Perf mode: log and sleep
-		log.Println(msg)
-		time.Sleep(10 * time.Millisecond)
-	}
-}
 
 // String returns a string representation of the sequencer
 func (s *Sequencer) String() string {

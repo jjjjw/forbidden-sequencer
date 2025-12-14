@@ -97,9 +97,6 @@ func (h *HihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 
 	// Only fire if we're in the "playing" state
 	if state == "playing" {
-		// Always use closed hihat (MIDI note 42)
-		note := uint8(42)
-
 		// Fire event with duration = 75% of tick
 		noteDuration := time.Duration(float64(tickDuration) * 0.75)
 
@@ -107,7 +104,7 @@ func (h *HihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 			Event: events.Event{
 				Name: h.name,
 				Type: events.EventTypeNote,
-				A:    float32(note),
+				A:    0, // hihat doesn't use pitch
 				B:    float32(h.velocity),
 			},
 			Timing: events.Timing{

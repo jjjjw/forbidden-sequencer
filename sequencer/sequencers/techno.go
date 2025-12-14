@@ -11,8 +11,7 @@ import (
 // bpm: beats per minute
 // adapter: MIDI or other output adapter
 // eventChan: channel to send events to
-// debug: debug mode flag
-func NewTechnoSequencer(bpm float64, adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent, debug bool) *Sequencer {
+func NewTechnoSequencer(bpm float64, adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) *Sequencer {
 	// Create conductor
 	// ticksPerBeat: tick resolution (4 = 16th notes, 8 = 32nd notes)
 	conductor := conductors.NewCommonTimeConductor(bpm, 4)
@@ -23,5 +22,5 @@ func NewTechnoSequencer(bpm float64, adapter adapters.EventAdapter, eventChan ch
 	// Assemble into sequencer
 	patternsSlice := []Pattern{pattern}
 
-	return NewSequencer(patternsSlice, conductor, adapter, eventChan, debug)
+	return NewSequencer(patternsSlice, conductor, adapter, eventChan)
 }

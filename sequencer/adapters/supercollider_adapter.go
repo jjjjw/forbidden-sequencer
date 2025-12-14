@@ -29,21 +29,26 @@ type SuperColliderAdapter struct {
 	groupIDMapping   map[string]int32            // maps event names to Group IDs
 	busIDMapping     map[string]int32            // maps event names to output bus IDs
 	parameterMapping map[string]ParameterMapping // maps event names to parameter mappings
+	debug            bool                        // enable debug logging
 	debugLog         *log.Logger                 // debug logger for OSC messages
 }
 
 // NewSuperColliderAdapter creates a new SuperCollider adapter
 // host: target host (e.g., "localhost")
 // port: scsynth port (default: 57110)
-func NewSuperColliderAdapter(host string, port int) (*SuperColliderAdapter, error) {
+// debug: enable debug logging to debug/sc_adapter_osc.log
+func NewSuperColliderAdapter(host string, port int, debug bool) (*SuperColliderAdapter, error) {
 	client := osc.NewClient(host, port)
 
-	// Create debug log file
-	debugFile, err := os.Create("debug/sc_adapter_osc.log")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create debug log: %w", err)
+	var debugLogger *log.Logger
+	if debug {
+		// Create debug log file
+		debugFile, err := os.Create("debug/sc_adapter_osc.log")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create debug log: %w", err)
+		}
+		debugLogger = log.New(debugFile, "", log.LstdFlags|log.Lmicroseconds)
 	}
-	debugLogger := log.New(debugFile, "", log.LstdFlags|log.Lmicroseconds)
 
 	return &SuperColliderAdapter{
 		client:           client,
@@ -53,6 +58,7 @@ func NewSuperColliderAdapter(host string, port int) (*SuperColliderAdapter, erro
 		groupIDMapping:   make(map[string]int32),
 		busIDMapping:     make(map[string]int32),
 		parameterMapping: make(map[string]ParameterMapping),
+		debug:            debug,
 		debugLog:         debugLogger,
 	}, nil
 }
@@ -175,6 +181,8 @@ func (sc *SuperColliderAdapter) Send(scheduled events.ScheduledEvent) error {
 	switch scheduled.Event.Type {
 	case events.EventTypeNote:
 		return sc.sendNote(scheduled)
+	case events.EventTypeFrequency:
+		return sc.sendFrequency(scheduled)
 	case events.EventTypeModulation:
 		return sc.sendModulation(scheduled)
 	case events.EventTypeRest:
@@ -261,6 +269,76 @@ func (sc *SuperColliderAdapter) sendNote(scheduled events.ScheduledEvent) error 
 	err := sc.client.Send(bundle)
 	if err != nil {
 		return fmt.Errorf("failed to send SuperCollider note bundle: %w", err)
+	}
+
+	return nil
+}
+
+// sendFrequency sends server commands for frequency events (Event.A is already in Hz)
+// Creates a bundle with /g_freeAll and /s_new commands for monophonic retriggering
+func (sc *SuperColliderAdapter) sendFrequency(scheduled events.ScheduledEvent) error {
+	event := scheduled.Event
+	timing := scheduled.Timing
+
+	// Get synthdef name, group ID, output bus, and parameter mapping
+	synthDefName := sc.GetSynthDefName(event.Name)
+	groupID := sc.GetGroupID(event.Name)
+	outputBus := sc.GetBusID(event.Name)
+	paramMapping := sc.GetParameterMapping(event.Name)
+
+	// Message 1: /g_freeAll - free all synths in the group (monophonic retrigger)
+	freeAllMsg := osc.NewMessage("/g_freeAll")
+	freeAllMsg.Append(groupID)
+
+	// Message 2: /s_new - create new synth
+	newSynthMsg := osc.NewMessage("/s_new")
+	newSynthMsg.Append(synthDefName)  // synthdef name
+	newSynthMsg.Append(int32(-1))     // nodeID (-1 = auto-generate)
+	newSynthMsg.Append(int32(1))      // addAction (1 = tail)
+	newSynthMsg.Append(groupID)       // target group ID
+
+	// Add parameters based on mapping
+	// For EventTypeFrequency, Event.A is already in Hz, no conversion needed
+	if paramMapping.A != "" {
+		newSynthMsg.Append(paramMapping.A)
+		newSynthMsg.Append(event.A) // already in Hz
+	}
+	if paramMapping.B != "" {
+		newSynthMsg.Append(paramMapping.B)
+		newSynthMsg.Append(event.B)
+	}
+	if paramMapping.C != "" {
+		newSynthMsg.Append(paramMapping.C)
+		newSynthMsg.Append(event.C)
+	}
+	if paramMapping.D != "" {
+		newSynthMsg.Append(paramMapping.D)
+		newSynthMsg.Append(event.D)
+	}
+
+	// Always add len and out
+	newSynthMsg.Append("len")
+	newSynthMsg.Append(float32(timing.Duration.Seconds()))
+	newSynthMsg.Append("out")
+	newSynthMsg.Append(outputBus)
+
+	// Debug log the message
+	if sc.debugLog != nil {
+		sc.debugLog.Printf("Event: %s (frequency) -> SynthDef: %s, Group: %d, Bus: %d", event.Name, synthDefName, groupID, outputBus)
+		sc.debugLog.Printf("  Param mapping: A=%s, B=%s, C=%s, D=%s", paramMapping.A, paramMapping.B, paramMapping.C, paramMapping.D)
+		sc.debugLog.Printf("  Param values: A=%v Hz, B=%v, C=%v, D=%v", event.A, event.B, event.C, event.D)
+		sc.debugLog.Printf("  len=%v, out=%v", timing.Duration.Seconds(), outputBus)
+	}
+
+	// Create bundle with both messages and timestamp
+	bundle := osc.NewBundle(timing.Timestamp)
+	bundle.Append(freeAllMsg)
+	bundle.Append(newSynthMsg)
+
+	// Send the bundle to scsynth
+	err := sc.client.Send(bundle)
+	if err != nil {
+		return fmt.Errorf("failed to send SuperCollider frequency bundle: %w", err)
 	}
 
 	return nil

@@ -35,6 +35,7 @@ type Model struct {
 	IsPlaying  bool
 	Screen     Screen
 	Err        error
+	Debug      bool // debug logging enabled
 
 	// Sequencer management
 	SequencerFactories     []sequencers.SequencerFactory // factory for each sequencer type

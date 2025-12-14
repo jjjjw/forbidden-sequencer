@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -11,6 +12,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+var debug = flag.Bool("debug", false, "Enable debug logging")
 
 func initialModel() tui.Model {
 	// Load settings
@@ -23,7 +26,7 @@ func initialModel() tui.Model {
 	}
 
 	// Initialize SuperCollider adapter
-	scAdapter, err := adapters.SetupSuperColliderAdapter()
+	scAdapter, err := adapters.SetupSuperColliderAdapter(*debug)
 	if err != nil {
 		return tui.Model{
 			Settings: settings,
@@ -36,6 +39,7 @@ func initialModel() tui.Model {
 		Settings:     settings,
 		Screen:       tui.ScreenMain,
 		SCAdapter:    scAdapter,
+		Debug:        *debug,
 	}
 
 	// Create event channel (owned by model)
@@ -70,6 +74,8 @@ func initialModel() tui.Model {
 }
 
 func main() {
+	flag.Parse()
+
 	m := initialModel()
 	p := tea.NewProgram(m, tea.WithAltScreen())
 

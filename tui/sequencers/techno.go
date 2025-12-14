@@ -34,7 +34,7 @@ func NewTechnoConfig(adapter adapters.EventAdapter, eventChan chan<- events.Sche
 	// Create sequencer with default settings
 	// BPM: 140
 	bpm := 140.0
-	sequencer := seqlib.NewTechnoSequencer(bpm, adapter, eventChan, false)
+	sequencer := seqlib.NewTechnoSequencer(bpm, adapter, eventChan)
 
 	return &TechnoConfig{
 		sequencer: sequencer,

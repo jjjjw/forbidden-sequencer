@@ -16,7 +16,7 @@ type KickPattern struct {
 	conductor       *conductors.PhraseConductor
 	rhythmConductor *conductors.ModulatedRhythmConductor
 	name            string  // event name
-	note            uint8   // MIDI note number
+	frequency       float32 // frequency in Hz
 	velocity        float64 // event velocity
 	paused          bool
 	chain           *lib.MarkovChain // Markov chain for play/silent decisions
@@ -27,7 +27,7 @@ func NewKickPattern(
 	conductor *conductors.PhraseConductor,
 	rhythmConductor *conductors.ModulatedRhythmConductor,
 	name string,
-	note uint8,
+	frequency float32,
 	velocity float64,
 ) *KickPattern {
 	// Create Markov chain with two states: playing and silent
@@ -46,7 +46,7 @@ func NewKickPattern(
 		conductor:       conductor,
 		rhythmConductor: rhythmConductor,
 		name:            name,
-		note:            note,
+		frequency:       frequency,
 		velocity:        velocity,
 		paused:          true,
 		chain:           chain,
@@ -102,8 +102,8 @@ func (k *KickPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDura
 		return []events.ScheduledEvent{{
 			Event: events.Event{
 				Name: k.name,
-				Type: events.EventTypeNote,
-				A:    float32(k.note),
+				Type: events.EventTypeFrequency,
+				A:    k.frequency, // frequency in Hz
 				B:    float32(k.velocity),
 			},
 			Timing: events.Timing{

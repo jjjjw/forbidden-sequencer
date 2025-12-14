@@ -17,7 +17,6 @@ import (
 // rootNote: base MIDI note (e.g., 60 for middle C)
 // adapter: MIDI or other output adapter
 // eventChan: channel to send events to
-// debug: debug mode flag
 func NewArpSequencer(
 	baseTickDuration time.Duration,
 	sequence []int,
@@ -25,7 +24,6 @@ func NewArpSequencer(
 	rootNote uint8,
 	adapter adapters.EventAdapter,
 	eventChan chan<- events.ScheduledEvent,
-	debug bool,
 ) (*Sequencer, *arp.ArpPattern, *conductors.PhraseConductor) {
 	// Create phrase conductor
 	phraseConductor := conductors.NewPhraseConductor(baseTickDuration, len(sequence))
@@ -41,5 +39,5 @@ func NewArpSequencer(
 
 	patterns := []Pattern{arpPattern}
 
-	return NewSequencer(patterns, phraseConductor, adapter, eventChan, debug), arpPattern, phraseConductor
+	return NewSequencer(patterns, phraseConductor, adapter, eventChan), arpPattern, phraseConductor
 }

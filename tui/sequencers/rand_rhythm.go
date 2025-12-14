@@ -42,7 +42,6 @@ func NewRandRhythmConfig(adapter adapters.EventAdapter, eventChan chan<- events.
 		16,
 		adapter,
 		eventChan,
-		false, // debug
 	)
 
 	return &RandRhythmConfig{

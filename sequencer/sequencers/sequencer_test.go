@@ -130,7 +130,7 @@ func TestSequencer_NewSequencer(t *testing.T) {
 	pattern := newMockPattern(conductor, 5)
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
 
 	if seq == nil {
 		t.Fatal("Expected non-nil sequencer")
@@ -147,7 +147,7 @@ func TestSequencer_StartAndPatternExecution(t *testing.T) {
 	pattern := newMockPattern(conductor, 3) // Generate 3 events
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
 	seq.Start()
 	seq.Play() // Start playback
 
@@ -180,7 +180,7 @@ func TestSequencer_StopAndPlay(t *testing.T) {
 	pattern := newMockPattern(conductor, 100) // Lots of events
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
 	seq.Start()
 	seq.Play() // Start playing
 
@@ -227,7 +227,7 @@ func TestSequencer_MultiplePatterns(t *testing.T) {
 	pattern2 := newMockPattern(conductor, 2)
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern1, pattern2}, conductor, adapter, eventChan, false)
+	seq := NewSequencer([]Pattern{pattern1, pattern2}, conductor, adapter, eventChan)
 	seq.Start()
 	seq.Play() // Start playback
 
@@ -256,7 +256,7 @@ func TestSequencer_ConductorIntegration(t *testing.T) {
 	pattern := newMockPattern(conductor, 5)
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
 	seq.Start()
 	seq.Play()
 
@@ -290,7 +290,7 @@ func TestSequencer_PlayStopPlayCycle(t *testing.T) {
 	pattern := newMockPattern(conductor, 100)
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
 	seq.Start()
 
 	// First play cycle

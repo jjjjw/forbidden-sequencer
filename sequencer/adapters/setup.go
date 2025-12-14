@@ -21,9 +21,9 @@ func SetupOSCAdapter() (*OSCAdapter, error) {
 
 // SetupSuperColliderAdapter creates and configures a SuperCollider adapter
 // with default mappings for the Forbidden Sequencer
-func SetupSuperColliderAdapter() (*SuperColliderAdapter, error) {
+func SetupSuperColliderAdapter(debug bool) (*SuperColliderAdapter, error) {
 	// Initialize SuperCollider adapter (localhost:57110 is scsynth default port)
-	scAdapter, err := NewSuperColliderAdapter("localhost", 57110)
+	scAdapter, err := NewSuperColliderAdapter("localhost", 57110, debug)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize SuperCollider adapter: %w", err)
 	}
