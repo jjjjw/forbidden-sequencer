@@ -117,8 +117,9 @@ func (a *ArpPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurat
 		// Return rest event
 		return []events.ScheduledEvent{{
 			Event: events.Event{
-				Name: a.name,
-				Type: events.EventTypeRest,
+				Name:   a.name,
+				Type:   events.EventTypeRest,
+				Params: map[string]float32{},
 			},
 			Timing: events.Timing{
 				Timestamp: nextTickTime,
@@ -146,8 +147,10 @@ func (a *ArpPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurat
 		Event: events.Event{
 			Name: a.name,
 			Type: events.EventTypeNote,
-			A:    float32(transposedNote),
-			B:    float32(a.velocity),
+			Params: map[string]float32{
+				"midi_note": float32(transposedNote),
+				"amp":       float32(a.velocity),
+			},
 		},
 		Timing: events.Timing{
 			Timestamp: nextTickTime,

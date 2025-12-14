@@ -89,8 +89,10 @@ func (k *SimpleKickPattern) GetScheduledEventsForTick(nextTickTime time.Time, ti
 				Event: events.Event{
 					Name: k.name,
 					Type: events.EventTypeNote,
-					A:    float32(k.note),
-					B:    float32(k.velocity),
+					Params: map[string]float32{
+						"midi_note": float32(k.note),
+						"amp":       float32(k.velocity),
+					},
 				},
 				Timing: events.Timing{
 					Timestamp: eventTime,

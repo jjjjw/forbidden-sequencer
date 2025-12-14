@@ -70,8 +70,9 @@ func (s *SnarePattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 			Event: events.Event{
 				Name: s.name,
 				Type: events.EventTypeNote,
-				A:    0, // snare doesn't use pitch
-				B:    float32(s.velocity),
+				Params: map[string]float32{
+					"amp": float32(s.velocity),
+				},
 			},
 			Timing: events.Timing{
 				Timestamp: nextTickTime,

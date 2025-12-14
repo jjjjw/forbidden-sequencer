@@ -89,8 +89,10 @@ func (h *SimpleHihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, t
 				Event: events.Event{
 					Name: h.name,
 					Type: events.EventTypeNote,
-					A:    float32(note),
-					B:    float32(h.velocity),
+					Params: map[string]float32{
+						"midi_note": float32(note),
+						"amp":       float32(h.velocity),
+					},
 				},
 				Timing: events.Timing{
 					Timestamp: eventTime,

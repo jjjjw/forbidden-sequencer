@@ -8,7 +8,7 @@ SynthDef(\fdnReverb, {
       earlyMix=0.3;  // Mix level for early reflections
 
   var input, dry, snd, processed, wet_sig;
-  var step2, step4;  // Early reflections
+  var er1, er2;  // Early reflections
   var hadamard;
   var lfo1, lfo2, lfo3, lfo4, lfo5, lfo6, lfo7, lfo8;
 
@@ -31,32 +31,28 @@ SynthDef(\fdnReverb, {
   // Expand stereo to 8 channels
   snd = input.wrapExtend(8);
 
-  // DIFFUSION: 4 steps of 8 delays with Hadamard mixing
-  // Step 1
+  // DIFFUSION: 4 stages of 8 delays with Hadamard mixing
   snd = DelayC.ar(snd, 0.05,
     [0.0020, 0.0039, 0.0060, 0.0081, 0.0104, 0.0131, 0.0154, 0.0185] * size);
   snd = snd * hadamard.flop;
   snd = snd.sum;
 
-  // Step 2
   snd = DelayC.ar(snd, 0.05,
     [0.0216, 0.0239, 0.0272, 0.0296, 0.0315, 0.0329, 0.0375, 0.0396] * size);
   snd = snd * hadamard.flop;
   snd = snd.sum;
-  step2 = snd;  // Capture early reflections from step 2
+  er1 = snd;  // Capture early reflections
 
-  // Step 3
   snd = DelayC.ar(snd, 0.1,
     [0.0405, 0.0462, 0.0518, 0.0585, 0.0606, 0.0686, 0.0712, 0.0795] * size);
   snd = snd * hadamard.flop;
   snd = snd.sum;
 
-  // Step 4
   snd = DelayC.ar(snd, 0.2,
     [0.0873, 0.0974, 0.1022, 0.1113, 0.1231, 0.1366, 0.1449, 0.1539] * size);
   snd = snd * hadamard.flop;
   snd = snd.sum;
-  step4 = snd;  // Capture early reflections from step 4
+  er2 = snd;  // Capture early reflection
 
   // FEEDBACK: 8 delays with Hadamard matrix mixing
   snd = snd + LocalIn.ar(8);
@@ -94,7 +90,7 @@ SynthDef(\fdnReverb, {
   processed = Splay.ar(snd);
 
   // Add early reflections from step 2 and step 4
-  processed = processed + (Splay.ar(step2) * earlyMix) + (Splay.ar(step4) * earlyMix);
+  processed = processed + (Splay.ar(er1) * earlyMix) + (Splay.ar(er2) * earlyMix);
 
   // Mix dry and wet
   wet_sig = (dry * (1 - wet)) + (processed * wet);

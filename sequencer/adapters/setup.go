@@ -51,38 +51,5 @@ func SetupSuperColliderAdapter(debug bool) (*SuperColliderAdapter, error) {
 	scAdapter.SetBusID("fm2", 10)   // route fm2 to reverb
 	// kick and hihat use default (bus 0)
 
-	// Set Parameter mappings (event name -> parameter control names)
-	// Maps Event.A/B/C/D to synth control parameter names
-	scAdapter.SetParameterMapping("kick", ParameterMapping{
-		A: "freq",  // Event.A controls frequency
-		B: "amp",   // Event.B controls amplitude
-		C: "ratio", // Event.C controls frequency ratio
-		D: "sweep", // Event.D controls sweep time
-	})
-	scAdapter.SetParameterMapping("snare", ParameterMapping{
-		A: "freq", // Event.A controls frequency (not used much in cp)
-		B: "amp",  // Event.B controls amplitude
-		C: "",     // Event.C unused
-		D: "",     // Event.D unused
-	})
-	scAdapter.SetParameterMapping("hihat", ParameterMapping{
-		A: "freq", // Event.A controls frequency (not used much in hh)
-		B: "amp",  // Event.B controls amplitude
-		C: "",     // Event.C unused
-		D: "",     // Event.D unused
-	})
-	scAdapter.SetParameterMapping("fm1", ParameterMapping{
-		A: "freq",     // Event.A controls carrier frequency
-		B: "amp",      // Event.B controls amplitude
-		C: "modRatio", // Event.C controls modulator ratio
-		D: "modIndex", // Event.D controls modulation index
-	})
-	scAdapter.SetParameterMapping("fm2", ParameterMapping{
-		A: "freq",     // Event.A controls carrier frequency
-		B: "amp",      // Event.B controls amplitude
-		C: "modRatio", // Event.C controls modulator ratio
-		D: "modIndex", // Event.D controls modulation index
-	})
-
 	return scAdapter, nil
 }

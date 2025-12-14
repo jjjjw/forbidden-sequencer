@@ -99,10 +99,12 @@ func (f *FMPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurati
 		Event: events.Event{
 			Name: f.name,
 			Type: events.EventTypeNote,
-			A:    float32(midiNote), // MIDI note (will be converted to freq by adapter)
-			B:    float32(f.velocity), // amplitude
-			C:    modRatio, // FM ratio (C parameter)
-			D:    modIndex, // FM modulation index (D parameter)
+			Params: map[string]float32{
+				"midi_note": float32(midiNote),
+				"amp":       float32(f.velocity),
+				"modRatio":  modRatio,
+				"modIndex":  modIndex,
+			},
 		},
 		Timing: events.Timing{
 			Timestamp: nextTickTime,

@@ -81,8 +81,10 @@ func (g *GatedPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 			Event: events.Event{
 				Name: g.name,
 				Type: events.EventTypeNote,
-				A:    float32(g.note),
-				B:    float32(g.velocity),
+				Params: map[string]float32{
+					"midi_note": float32(g.note),
+					"amp":       float32(g.velocity),
+				},
 			},
 			Timing: events.Timing{
 				Timestamp: nextTickTime,

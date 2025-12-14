@@ -7,8 +7,11 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 ### Core Concepts
 
 **Events** - Protocol-agnostic musical data
-- `Event`: name, type, a, b, c, d (float32 parameters)
+- `Event`: name, type, params (dictionary of string → float32)
+  - Common params: `freq`, `midi_note`, `amp`, `len`
+  - Synth-specific params: `modRatio`, `modIndex`, etc.
 - `ScheduledEvent`: Event + Timing (timestamp + duration)
+- Adapters handle conversions (e.g., midi_note → freq for SuperCollider)
 
 **Pattern** - Tick-driven event generator
 - Interface: `GetScheduledEventsForTick(nextTickTime, tickDuration)`, `Reset()`, `Play()`, `Stop()`
@@ -39,8 +42,9 @@ A modular, pattern-based MIDI sequencer with live performance controls.
 - Events channel for sending scheduled events to TUI
 
 **Adapters** - Protocol output
-- `MIDIAdapter`: Converts frequency → MIDI, handles timing in goroutines
-- Future: OSC, etc.
+- `MIDIAdapter`: Reads `midi_note` or `freq` from params, converts as needed, handles timing in goroutines
+- `SuperColliderAdapter`: Sends OSC to scsynth, converts `midi_note` to `freq`, passes all params to SynthDef
+- `OSCAdapter`: Generic OSC output, converts params to OSC message arguments
 
 ### System Flow
 
@@ -73,6 +77,51 @@ sequencer.Play()
 - No internal state needed - pattern is a pure function of conductor state
 
 **Result:** "boom tick boom tick" techno beat at 120 BPM
+
+### Event Creation Examples
+
+**Simple kick drum with frequency:**
+```go
+events.Event{
+    Name: "kick",
+    Type: events.EventTypeNote,
+    Params: map[string]float32{
+        "freq": 60.0,  // 60 Hz kick
+        "amp":  0.8,   // 80% amplitude
+    },
+}
+```
+
+**Arpeggio note with MIDI note number:**
+```go
+events.Event{
+    Name: "arp",
+    Type: events.EventTypeNote,
+    Params: map[string]float32{
+        "midi_note": 60.0,  // Middle C
+        "amp":       0.9,   // 90% amplitude
+    },
+}
+```
+
+**FM synth with custom parameters:**
+```go
+events.Event{
+    Name: "fm1",
+    Type: events.EventTypeNote,
+    Params: map[string]float32{
+        "midi_note": 48.0,    // C3
+        "amp":       0.7,     // 70% amplitude
+        "modRatio":  2.0,     // Modulator at 2x carrier freq
+        "modIndex":  1.5,     // Modulation depth
+    },
+}
+```
+
+**Note:** Adapters automatically handle conversions:
+- SuperCollider: `midi_note` → `freq` conversion
+- MIDI: `freq` → `midi_note` conversion
+- Params are passed directly to synths/instruments
 
 ## Next Steps
 

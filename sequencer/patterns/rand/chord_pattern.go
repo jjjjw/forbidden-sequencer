@@ -86,8 +86,10 @@ func (c *ChordPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 				Event: events.Event{
 					Name: c.name,
 					Type: events.EventTypeNote,
-					A:    float32(note),
-					B:    float32(c.velocity),
+					Params: map[string]float32{
+						"midi_note": float32(note),
+						"amp":       float32(c.velocity),
+					},
 				},
 				Timing: events.Timing{
 					Timestamp: nextTickTime,

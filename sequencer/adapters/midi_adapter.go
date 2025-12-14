@@ -187,11 +187,26 @@ func (m *MIDIAdapter) Send(scheduled events.ScheduledEvent) error {
 func (m *MIDIAdapter) sendNote(scheduled events.ScheduledEvent) error {
 	event := scheduled.Event
 	timing := scheduled.Timing
-	// A is MIDI note number directly for EventTypeNote
-	midiNote := uint8(event.A)
 
-	// Convert normalized velocity (0.0-1.0) to MIDI velocity (0-127)
-	velocity := uint8(event.B * 127.0)
+	// Get MIDI note - prefer midi_note, but convert from freq if needed
+	var midiNote uint8
+	if midiNoteParam, hasMidiNote := event.Params["midi_note"]; hasMidiNote {
+		midiNote = uint8(midiNoteParam)
+	} else if freq, hasFreq := event.Params["freq"]; hasFreq {
+		midiNote = frequencyToMIDI(freq)
+	} else {
+		// Default to middle C if no note specified
+		midiNote = 60
+	}
+
+	// Get velocity/amplitude - default to 0.8 if not specified
+	amp := float32(0.8)
+	if ampParam, hasAmp := event.Params["amp"]; hasAmp {
+		amp = ampParam
+	}
+
+	// Convert normalized amplitude (0.0-1.0) to MIDI velocity (0-127)
+	velocity := uint8(amp * 127.0)
 
 	// Get channel from mapping
 	channel := m.GetChannelMapping(event.Name)
@@ -215,9 +230,10 @@ func (m *MIDIAdapter) sendNote(scheduled events.ScheduledEvent) error {
 // sendCC sends MIDI CC message
 func (m *MIDIAdapter) sendCC(scheduled events.ScheduledEvent) error {
 	event := scheduled.Event
-	// a = CC number, b = value (0.0-1.0)
-	ccNum := uint8(event.A)
-	ccValue := uint8(event.B * 127.0)
+
+	// Get CC number and value from params
+	ccNum := uint8(event.Params["cc_num"])
+	ccValue := uint8(event.Params["cc_value"] * 127.0)
 
 	// Get channel from mapping
 	channel := m.GetChannelMapping(event.Name)

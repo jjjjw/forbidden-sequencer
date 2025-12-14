@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"fmt"
+	"math"
 
 	"forbidden_sequencer/sequencer/events"
 
@@ -89,7 +90,7 @@ func (o *OSCAdapter) Send(scheduled events.ScheduledEvent) error {
 
 // sendNote sends OSC bundle with timestamp for note events
 // Bundle contains the timestamp, message contains all event parameters
-// Message format: <address> <freq> <velocity> <duration> [<c> <d>]
+// Message format: <address> [all params from Params dict]
 func (o *OSCAdapter) sendNote(scheduled events.ScheduledEvent) error {
 	event := scheduled.Event
 	timing := scheduled.Timing
@@ -99,11 +100,34 @@ func (o *OSCAdapter) sendNote(scheduled events.ScheduledEvent) error {
 
 	// Build OSC message with all parameters
 	msg := osc.NewMessage(address)
-	msg.Append(event.A)                            // frequency or note number (float32)
-	msg.Append(event.B)                            // velocity (0.0-1.0)
-	msg.Append(float32(timing.Duration.Seconds())) // duration in seconds
-	msg.Append(event.C)                            // additional parameter C
-	msg.Append(event.D)                            // additional parameter D
+
+	// Add frequency (convert from midi_note if needed)
+	if midiNote, hasMidiNote := event.Params["midi_note"]; hasMidiNote {
+		// Convert MIDI note to frequency for OSC
+		freq := float32(440.0 * math.Pow(2.0, (float64(midiNote)-69.0)/12.0))
+		msg.Append(freq)
+	} else if freq, hasFreq := event.Params["freq"]; hasFreq {
+		msg.Append(freq)
+	}
+
+	// Add amplitude
+	if amp, hasAmp := event.Params["amp"]; hasAmp {
+		msg.Append(amp)
+	}
+
+	// Add duration
+	if lenParam, hasLen := event.Params["len"]; hasLen {
+		msg.Append(lenParam)
+	} else {
+		msg.Append(float32(timing.Duration.Seconds()))
+	}
+
+	// Add all other parameters
+	for key, value := range event.Params {
+		if key != "midi_note" && key != "freq" && key != "amp" && key != "len" {
+			msg.Append(value)
+		}
+	}
 
 	// Create bundle with timestamp for precise timing
 	bundle := osc.NewBundle(timing.Timestamp)
@@ -119,7 +143,7 @@ func (o *OSCAdapter) sendNote(scheduled events.ScheduledEvent) error {
 }
 
 // sendModulation sends OSC bundle with timestamp for modulation/CC events
-// Message format: <address> <param> <value> [<c> <d>]
+// Message format: <address> [all params from Params dict]
 func (o *OSCAdapter) sendModulation(scheduled events.ScheduledEvent) error {
 	event := scheduled.Event
 	timing := scheduled.Timing
@@ -129,10 +153,11 @@ func (o *OSCAdapter) sendModulation(scheduled events.ScheduledEvent) error {
 
 	// Build OSC message
 	msg := osc.NewMessage(address)
-	msg.Append(event.A) // parameter number
-	msg.Append(event.B) // value (0.0-1.0)
-	msg.Append(event.C) // additional parameter C
-	msg.Append(event.D) // additional parameter D
+
+	// Add all parameters from Params dict
+	for _, value := range event.Params {
+		msg.Append(value)
+	}
 
 	// Create bundle with timestamp
 	bundle := osc.NewBundle(timing.Timestamp)

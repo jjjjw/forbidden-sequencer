@@ -102,9 +102,11 @@ func (k *KickPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDura
 		return []events.ScheduledEvent{{
 			Event: events.Event{
 				Name: k.name,
-				Type: events.EventTypeFrequency,
-				A:    k.frequency, // frequency in Hz
-				B:    float32(k.velocity),
+				Type: events.EventTypeNote,
+				Params: map[string]float32{
+					"freq": k.frequency,
+					"amp":  float32(k.velocity),
+				},
 			},
 			Timing: events.Timing{
 				Timestamp: nextTickTime,

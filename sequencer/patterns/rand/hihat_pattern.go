@@ -104,8 +104,9 @@ func (h *HihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 			Event: events.Event{
 				Name: h.name,
 				Type: events.EventTypeNote,
-				A:    0, // hihat doesn't use pitch
-				B:    float32(h.velocity),
+				Params: map[string]float32{
+					"amp": float32(h.velocity),
+				},
 			},
 			Timing: events.Timing{
 				Timestamp: nextTickTime,

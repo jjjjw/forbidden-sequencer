@@ -60,8 +60,10 @@ func (t *TechnoPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDu
 			Event: events.Event{
 				Name: "kick",
 				Type: events.EventTypeNote,
-				A:    36,  // MIDI note number
-				B:    0.8, // velocity
+				Params: map[string]float32{
+					"midi_note": 36,
+					"amp":       0.8,
+				},
 			},
 			Timing: events.Timing{
 				Timestamp: nextTickTime,
@@ -73,8 +75,10 @@ func (t *TechnoPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDu
 			Event: events.Event{
 				Name: "hihat",
 				Type: events.EventTypeNote,
-				A:    42,  // MIDI note number
-				B:    0.6, // velocity
+				Params: map[string]float32{
+					"midi_note": 42,
+					"amp":       0.6,
+				},
 			},
 			Timing: events.Timing{
 				Timestamp: nextTickTime.Add(halfBeatDuration),

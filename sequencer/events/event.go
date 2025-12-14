@@ -6,48 +6,39 @@ import "time"
 type EventType string
 
 const (
-	EventTypeNote       EventType = "note"      // MIDI note number
-	EventTypeFrequency  EventType = "frequency" // Direct frequency in Hz
-	EventTypeModulation EventType = "modulation"
-	EventTypeRest       EventType = "rest"
+	EventTypeNote       EventType = "note"       // Note event (can have freq or midi_note in Params)
+	EventTypeModulation EventType = "modulation" // Modulation/CC event
+	EventTypeRest       EventType = "rest"       // Rest/silence event
 )
 
 // Event represents an abstract musical event in the sequencer
-// All parameters are float32 for maximum flexibility across protocols.
-// The meaning of parameters a, b, c, d depends on the event type:
+// Parameters are stored as a flexible map of string keys to float32 values.
+//
+// Common parameter names:
+//   - freq: frequency in Hz (e.g., 440.0 for A4)
+//   - midi_note: MIDI note number (0-127, e.g., 69.0 for A4)
+//   - amp: amplitude/velocity (0.0-1.0 normalized)
+//   - len: duration in seconds (optional, Timing.Duration is used by default)
 //
 // For EventTypeNote:
-//   - a: MIDI note number (0-127, e.g., 69.0 for A4)
-//   - b: velocity/intensity (0.0-1.0 normalized)
-//   - c: reserved for future use
-//   - d: reserved for future use
-//
-// For EventTypeFrequency:
-//   - a: frequency in Hz (e.g., 440.0 for A4)
-//   - b: velocity/intensity (0.0-1.0 normalized)
-//   - c: reserved for future use
-//   - d: reserved for future use
+//   - Use either "freq" OR "midi_note" (adapters will convert as needed)
+//   - Common params: amp, len, and any synth-specific parameters
 //
 // For EventTypeModulation (MIDI CC):
-//   - a: CC number (e.g., 1.0 for mod wheel)
-//   - b: CC value (0.0-1.0 normalized)
-//   - c: reserved for future use
-//   - d: reserved for future use
+//   - cc_num: CC number (e.g., 1.0 for mod wheel)
+//   - cc_value: CC value (0.0-1.0 normalized)
 //
 // For EventTypeRest:
-//   - No parameters used (rest is a no-op)
+//   - No parameters needed (rest is a no-op)
 type Event struct {
-	Name string    // Event identifier/name
-	Type EventType // Type of event
-	A    float32   // First parameter (meaning depends on type)
-	B    float32   // Second parameter (meaning depends on type)
-	C    float32   // Third parameter (reserved for future use)
-	D    float32   // Fourth parameter (reserved for future use)
+	Name   string             // Event identifier/name
+	Type   EventType          // Type of event
+	Params map[string]float32 // Flexible parameter dictionary
 }
 
 // Timing represents when and how long an event should play
 type Timing struct {
-	Timestamp time.Time // Absolute time of the event start
+	Timestamp time.Time     // Absolute time of the event start
 	Duration  time.Duration // How long event lasts (could be different than the delta between events)
 }
 

@@ -47,8 +47,10 @@ func (m *mockPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDura
 		Event: events.Event{
 			Name: fmt.Sprintf("event_%d", m.eventCount),
 			Type: events.EventTypeNote,
-			A:    60.0,
-			B:    0.5,
+			Params: map[string]float32{
+				"midi_note": 60.0,
+				"amp":       0.5,
+			},
 		},
 		Timing: events.Timing{
 			Timestamp: nextTickTime,
