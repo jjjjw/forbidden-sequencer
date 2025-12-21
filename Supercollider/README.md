@@ -6,9 +6,9 @@ This folder contains SuperCollider SynthDefs and setup scripts for the Forbidden
 
 The sequencer sends events to SuperCollider via **direct server commands** (OSC protocol):
 
-- Go → **scsynth** (port 57110) using `/g_freeAll` and `/s_new` commands
+- Go → **scsynth** (port 57110) using `/n_free` and `/s_new` commands
 - **Server-side scheduling** with timestamped OSC bundles
-- **Monophonic voices** via Groups: each event frees the group then creates new synth
+- **Node-based voice management**: intelligent per-event polyphony control via `max_voices` parameter
 
 ### Event Flow
 
@@ -17,19 +17,19 @@ Go Sequencer
     ↓ (timestamped OSC bundle)
 scsynth (port 57110)
     ↓ (server scheduler)
-/g_freeAll [groupID]  → free old synth
-/s_new [synthDef...]  → create new synth
+/n_free [nodeID]      → free oldest voice if max_voices exceeded (voice stealing)
+/s_new [synthDef...]  → create new synth with unique node ID
 ```
 
 ### Mappings
 
-| Event | SynthDef | Group ID | Bus |
-|-------|----------|----------|-----|
-| kick  | bd       | 100      | 0 (master out) |
-| snare | cp       | 101      | 10 (reverb) |
-| hihat | hh       | 102      | 0 (master out) |
-| fm1   | fm2op    | 103      | 10 (reverb) |
-| fm2   | fm2op    | 104      | 10 (reverb) |
+| Event | SynthDef | Max Voices | Bus |
+|-------|----------|------------|-----|
+| kick  | bd       | 1 (default)| 0 (master out) |
+| snare | cp       | 1 (default)| 10 (reverb) |
+| hihat | hh       | 1 (default)| 0 (master out) |
+| fm    | fm2op    | 2          | 10 (reverb) |
+| arp   | arp      | 1 (default)| 10 (reverb) |
 
 ## Setup
 
@@ -60,8 +60,8 @@ SuperCollider server will listen on port **57110** (default scsynth port) for di
 
 ## Files
 
-- **synthdefs.scd** - SynthDef definitions for bd, cp, hh, fm2op, and fdnReverb
-- **setup.scd** - Initialize Groups, audio buses, and reverb
+- **synthdefs.scd** - SynthDef definitions for bd, cp, hh, fm2op, arp, and fdnReverb
+- **setup.scd** - Initialize audio buses and reverb
 - **README.md** - This file
 
 ## SynthDefs
@@ -83,6 +83,11 @@ SuperCollider server will listen on port **57110** (default scsynth port) for di
 - Modulator frequency is a ratio of the carrier frequency
 - Parameters: `freq`, `amp`, `len`, `out`, `modRatio` (0.5-7.0), `modIndex` (0.1-3.0)
 
+### `\arp` (Arpeggiator)
+- Pulse wave through resonant lowpass filter with envelope modulation
+- Classic arpeggiator sound with percussive filter sweep
+- Parameters: `freq`, `amp`, `len`, `out`, `cutoff` (2000 Hz default), `res` (0.5 default)
+
 ### `\fdnReverb` (FDN Reverb Effect)
 - Feedback Delay Network reverb with Hadamard matrix diffusion
 - Routes from bus 10 to master out (bus 0)
@@ -90,60 +95,81 @@ SuperCollider server will listen on port **57110** (default scsynth port) for di
 
 ## Architecture Details
 
-### Groups
-Groups are created with fixed IDs in `setup.scd`:
-- `~kickGroup` = 100
-- `~snareGroup` = 101
-- `~hihatGroup` = 102
-- `~fm1Group` = 103
-- `~fm2Group` = 104
+### Voice Management
 
-These IDs must match the mappings in Go (`sequencer/adapters/setup.go`).
+The Go adapter tracks active synth nodes per event name and implements intelligent voice stealing:
+
+- Each event has a configurable `max_voices` parameter (defaults to 1)
+- Adapter assigns unique node IDs (starting at 1001) and tracks their end times
+- When a new event would exceed `max_voices`:
+  - The oldest active node is freed via `/n_free` command
+  - Only nodes still playing at the new event's timestamp are freed
+- Active nodes are automatically cleaned up when their duration expires
 
 ### Buses
 - **Bus 0** - Master stereo out (default)
 - **Bus 10** - Reverb input (2 channels)
 
-The reverb synth processes audio from bus 10 and outputs to bus 0.
+The reverb synth (node ID 1000) processes audio from bus 10 and outputs to bus 0.
 
 ### Node Tree Execution Order
 
-SuperCollider executes nodes in the order they appear in the node tree. For the reverb to process audio from bus 10, voice groups **must execute before** the reverb synth.
+SuperCollider executes nodes in the order they appear in the node tree. For the reverb to process audio from bus 10, voice synths **must execute before** effects.
 
-**Required node tree structure:**
+The setup creates two groups with fixed IDs:
+- **Group 100** - Synths group (executes first)
+- **Group 200** - Effects group (executes second)
+
+**Node tree structure:**
 ```
 Group 0 (RootNode)
-  ├── 100 (kick group)    ← executes first
-  ├── 101 (snare group)   ← executes second
-  ├── 102 (hihat group)   ← executes third
-  ├── 103 (fm1 group)     ← executes fourth
-  ├── 104 (fm2 group)     ← executes fifth
-  └── 1000 (fdnReverb)    ← executes LAST (reads from bus 10)
+  ├── Group 100 (synths) - voice synths added here
+  │     ├── 2000+ (voice nodes) - execute first, write to bus 0 or 10
+  └── Group 200 (effects) - execute after synths
+        └── 1000 (fdnReverb) - reads from bus 10, writes to bus 0
 ```
 
-Run `s.queryAllNodes` in SuperCollider to verify the node tree structure matches the above.
+Run `s.queryAllNodes` in SuperCollider to verify the node tree structure.
 
 ### Server Commands
 
-Each note event sends a timestamped bundle with two commands:
+Each note event sends a timestamped bundle containing:
 
-1. **`/g_freeAll groupID`** - Frees all synths in the group (monophonic retrigger)
-2. **`/s_new synthDefName -1 1 groupID "amp" vel "len" dur "out" bus`** - Creates new synth
-   - nodeID: -1 (auto-generate)
-   - addAction: 1 (add to tail of group)
-   - targetID: groupID
+1. **`/n_free nodeID`** (optional) - Frees oldest voice if max_voices exceeded
+2. **`/s_new synthDefName nodeID 0 100 "param1" val1 "param2" val2...`** - Creates new synth
+   - nodeID: unique ID assigned by adapter (2000+)
+   - addAction: 0 (add to head of group)
+   - targetID: 100 (synths group)
+   - All event parameters passed as control pairs
 
 ## Customization
 
 ### Modify Synth Parameters
 Edit the SynthDefs in `synthdefs.scd` to add new controls or change synthesis.
 
-### Change Mappings
+### Change Bus Routing
 Edit both:
-1. `Supercollider/setup.scd` - Group IDs and bus numbers
-2. `sequencer/adapters/setup.go` - Go-side mappings to match
+1. `supercollider/setup.scd` - Bus numbers and reverb configuration
+2. `sequencer/adapters/setup.go` - Go-side bus mappings via `SetBusID()`
 
 ### Add New Sounds
 1. Add SynthDef to `synthdefs.scd`
-2. Create Group in `setup.scd` with unique ID
-3. Add mappings in `sequencer/adapters/setup.go`
+2. Add SynthDef and bus mappings in `sequencer/adapters/setup.go`:
+   ```go
+   scAdapter.SetSynthDefMapping("newSound", "newSynthDef")
+   scAdapter.SetBusID("newSound", 10) // route to reverb, or 0 for dry
+   ```
+3. Create pattern that emits events with name "newSound"
+
+### Configure Polyphony
+Set `max_voices` parameter in event patterns:
+```go
+Event{
+    Name: "fm",
+    Type: events.EventTypeNote,
+    Params: map[string]float32{
+        "midi_note":  60,
+        "max_voices": 4,  // allow up to 4 simultaneous voices
+    },
+}
+```

@@ -5,11 +5,19 @@ import (
 	"log"
 	"math"
 	"os"
+	"sync"
+	"time"
 
 	"forbidden_sequencer/sequencer/events"
 
 	"github.com/hypebeast/go-osc/osc"
 )
+
+// NodeInfo tracks an active synth node
+type NodeInfo struct {
+	NodeID  int32
+	EndTime time.Time
+}
 
 // SuperColliderAdapter implements EventAdapter for SuperCollider server commands
 // Sends OSC messages directly to scsynth (port 57110) using server command protocol
@@ -17,11 +25,13 @@ type SuperColliderAdapter struct {
 	client          *osc.Client
 	host            string
 	port            int
-	synthDefMapping map[string]string // maps event names to SynthDef names
-	groupIDMapping  map[string]int32  // maps event names to Group IDs
-	busIDMapping    map[string]int32  // maps event names to output bus IDs
-	debug           bool              // enable debug logging
-	debugLog        *log.Logger       // debug logger for OSC messages
+	synthDefMapping map[string]string     // maps event names to SynthDef names
+	busIDMapping    map[string]int32      // maps event names to output bus IDs
+	activeNodes     map[string][]NodeInfo // tracks active nodes per event name
+	nextNodeID      int32                 // auto-incrementing node ID
+	nodesMutex      sync.Mutex            // protects activeNodes and nextNodeID
+	debug           bool                  // enable debug logging
+	debugLog        *log.Logger           // debug logger for OSC messages
 }
 
 // NewSuperColliderAdapter creates a new SuperCollider adapter
@@ -46,8 +56,9 @@ func NewSuperColliderAdapter(host string, port int, debug bool) (*SuperColliderA
 		host:            host,
 		port:            port,
 		synthDefMapping: make(map[string]string),
-		groupIDMapping:  make(map[string]int32),
 		busIDMapping:    make(map[string]int32),
+		activeNodes:     make(map[string][]NodeInfo),
+		nextNodeID:      2000, // Start node IDs at 2000
 		debug:           debug,
 		debugLog:        debugLogger,
 	}, nil
@@ -59,19 +70,12 @@ func (sc *SuperColliderAdapter) SetSynthDefMapping(eventName string, synthDefNam
 	sc.synthDefMapping[eventName] = synthDefName
 }
 
-// SetGroupID sets the Group ID for a given event name
-// For example: SetGroupID("kick", 100)
-func (sc *SuperColliderAdapter) SetGroupID(eventName string, groupID int32) {
-	sc.groupIDMapping[eventName] = groupID
-}
-
 // SetBusID sets the output bus ID for a given event name
 // For example: SetBusID("snare", 10) to route snare to bus 10 (reverb)
 // Default is 0 (master out) if not set
 func (sc *SuperColliderAdapter) SetBusID(eventName string, busID int32) {
 	sc.busIDMapping[eventName] = busID
 }
-
 
 // GetSynthDefName returns the SynthDef name for a given event name
 func (sc *SuperColliderAdapter) GetSynthDefName(eventName string) string {
@@ -80,15 +84,6 @@ func (sc *SuperColliderAdapter) GetSynthDefName(eventName string) string {
 	}
 	// Default: use event name as synthdef name
 	return eventName
-}
-
-// GetGroupID returns the Group ID for a given event name
-func (sc *SuperColliderAdapter) GetGroupID(eventName string) int32 {
-	if id, ok := sc.groupIDMapping[eventName]; ok {
-		return id
-	}
-	// Default group ID if not mapped
-	return 1 // default group
 }
 
 // GetBusID returns the output bus ID for a given event name
@@ -119,15 +114,6 @@ func (sc *SuperColliderAdapter) GetAllSynthDefMappings() map[string]string {
 	return result
 }
 
-// GetAllGroupMappings returns all group ID mappings
-func (sc *SuperColliderAdapter) GetAllGroupMappings() map[string]int32 {
-	result := make(map[string]int32)
-	for k, v := range sc.groupIDMapping {
-		result[k] = v
-	}
-	return result
-}
-
 // GetAllBusMappings returns all bus ID mappings
 func (sc *SuperColliderAdapter) GetAllBusMappings() map[string]int32 {
 	result := make(map[string]int32)
@@ -136,7 +122,6 @@ func (sc *SuperColliderAdapter) GetAllBusMappings() map[string]int32 {
 	}
 	return result
 }
-
 
 // midiToFreq converts MIDI note number to frequency in Hz
 func midiToFreq(midiNote float32) float32 {
@@ -158,47 +143,83 @@ func (sc *SuperColliderAdapter) Send(scheduled events.ScheduledEvent) error {
 	return nil
 }
 
-// sendNote sends server commands for note events
-// Creates a bundle with /g_freeAll and /s_new commands for monophonic retriggering
+// sendNote sends server commands for note events using node-based voice management
 func (sc *SuperColliderAdapter) sendNote(scheduled events.ScheduledEvent) error {
 	event := scheduled.Event
 	timing := scheduled.Timing
 
-	// Get synthdef name, group ID, and output bus
+	// Get synthdef name and output bus
 	synthDefName := sc.GetSynthDefName(event.Name)
-	groupID := sc.GetGroupID(event.Name)
 	outputBus := sc.GetBusID(event.Name)
 
-	// Message 1: /g_freeAll - free all synths in the group (monophonic retrigger)
-	freeAllMsg := osc.NewMessage("/g_freeAll")
-	freeAllMsg.Append(groupID)
+	// Get max_voices from params (default to 1 if not specified)
+	maxVoices := 1
+	if maxVoicesParam, hasMaxVoices := event.Params["max_voices"]; hasMaxVoices {
+		maxVoices = int(maxVoicesParam)
+	}
 
-	// Message 2: /s_new - create new synth
+	// Lock for node management
+	sc.nodesMutex.Lock()
+
+	// Clean up finished nodes (nodes that will be finished by the new event's timestamp)
+	activeNodes := sc.activeNodes[event.Name]
+	filteredNodes := make([]NodeInfo, 0, len(activeNodes))
+	for _, node := range activeNodes {
+		if timing.Timestamp.Before(node.EndTime) {
+			filteredNodes = append(filteredNodes, node)
+		}
+	}
+	activeNodes = filteredNodes
+
+	// Prepare bundle for timestamped messages
+	bundle := osc.NewBundle(timing.Timestamp)
+
+	// If at voice limit, free oldest active voice
+	if len(activeNodes) >= maxVoices {
+		oldestNode := activeNodes[0]
+		// Only free if it will still be playing when this event starts
+		if timing.Timestamp.Before(oldestNode.EndTime) {
+			freeMsg := osc.NewMessage("/n_free")
+			freeMsg.Append(oldestNode.NodeID)
+			bundle.Append(freeMsg)
+		}
+		activeNodes = activeNodes[1:]
+	}
+
+	// Assign new node ID
+	nodeID := sc.nextNodeID
+	sc.nextNodeID++
+
+	// Track new node
+	endTime := timing.Timestamp.Add(timing.Duration)
+	activeNodes = append(activeNodes, NodeInfo{NodeID: nodeID, EndTime: endTime})
+	sc.activeNodes[event.Name] = activeNodes
+
+	sc.nodesMutex.Unlock()
+
+	// Create /s_new message
 	// Format: /s_new synthDefName nodeID addAction targetID [controls...]
-	// nodeID: -1 (auto-generate)
-	// addAction: 1 (add to tail of group)
-	// targetID: groupID
+	// addAction: 0 (add to head of group)
+	// targetID: 100 (synths group - executes before effects group 200)
 	newSynthMsg := osc.NewMessage("/s_new")
 	newSynthMsg.Append(synthDefName) // synthdef name
-	newSynthMsg.Append(int32(-1))    // nodeID (-1 = auto-generate)
-	newSynthMsg.Append(int32(1))     // addAction (1 = tail)
-	newSynthMsg.Append(groupID)      // target group ID
+	newSynthMsg.Append(nodeID)       // node ID
+	newSynthMsg.Append(int32(0))     // addAction (0 = add to head)
+	newSynthMsg.Append(int32(100))   // target (100 = synths group)
 
 	// Add parameters from Params dict
 	// Handle midi_note -> freq conversion if needed
 	if midiNote, hasMidiNote := event.Params["midi_note"]; hasMidiNote {
-		// Convert MIDI note to frequency and send as "freq"
 		newSynthMsg.Append("freq")
 		newSynthMsg.Append(midiToFreq(midiNote))
 	} else if freq, hasFreq := event.Params["freq"]; hasFreq {
-		// Send frequency directly
 		newSynthMsg.Append("freq")
 		newSynthMsg.Append(freq)
 	}
 
-	// Add all other parameters (except midi_note which was already handled)
+	// Add all other parameters (except midi_note, freq, len, max_voices)
 	for key, value := range event.Params {
-		if key != "midi_note" && key != "freq" && key != "len" {
+		if key != "midi_note" && key != "freq" && key != "len" && key != "max_voices" {
 			newSynthMsg.Append(key)
 			newSynthMsg.Append(value)
 		}
@@ -217,20 +238,13 @@ func (sc *SuperColliderAdapter) sendNote(scheduled events.ScheduledEvent) error 
 	newSynthMsg.Append("out")
 	newSynthMsg.Append(outputBus)
 
-	// Debug log the message
-	if sc.debugLog != nil {
-		sc.debugLog.Printf("Event: %s -> SynthDef: %s, Group: %d, Bus: %d", event.Name, synthDefName, groupID, outputBus)
-		sc.debugLog.Printf("  Params: %v", event.Params)
-		if midiNote, hasMidiNote := event.Params["midi_note"]; hasMidiNote {
-			sc.debugLog.Printf("  midi_note %v -> freq %v Hz", midiNote, midiToFreq(midiNote))
-		}
-		sc.debugLog.Printf("  len=%v, out=%v", timing.Duration.Seconds(), outputBus)
-	}
-
-	// Create bundle with both messages and timestamp
-	bundle := osc.NewBundle(timing.Timestamp)
-	bundle.Append(freeAllMsg)
+	// Add to bundle
 	bundle.Append(newSynthMsg)
+
+	// Debug log
+	if sc.debugLog != nil {
+		sc.debugLog.Printf("%v", bundle)
+	}
 
 	// Send the bundle to scsynth
 	err := sc.client.Send(bundle)

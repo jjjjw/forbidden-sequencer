@@ -1,7 +1,6 @@
 package modulated
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 // FMPattern generates melodic patterns for 2-op FM synthesis
 // Randomizes: pitch (from scale), duration, FM ratio, and FM modulation index
 type FMPattern struct {
-	name        string    // event name (fm1 or fm2)
 	velocity    float64   // event velocity
 	rootNote    uint8     // root MIDI note
 	scale       lib.Scale // scale to use for pitch generation
@@ -26,7 +24,6 @@ type FMPattern struct {
 // scale: scale to use for pitch generation
 // octaveRange: number of octaves to span
 func NewFMPattern(
-	name string,
 	velocity float64,
 	rootNote uint8,
 	scale lib.Scale,
@@ -34,7 +31,6 @@ func NewFMPattern(
 	seed int64,
 ) *FMPattern {
 	return &FMPattern{
-		name:        name,
 		velocity:    velocity,
 		rootNote:    rootNote,
 		scale:       scale,
@@ -61,7 +57,7 @@ func (f *FMPattern) Stop() {
 
 // String returns a string representation of the pattern
 func (f *FMPattern) String() string {
-	return fmt.Sprintf("%s FM (random)", f.name)
+	return "fm FM (random)"
 }
 
 // GetScheduledEventsForTick implements the Pattern interface
@@ -97,13 +93,14 @@ func (f *FMPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurati
 
 	return []events.ScheduledEvent{{
 		Event: events.Event{
-			Name: f.name,
+			Name: "fm",
 			Type: events.EventTypeNote,
 			Params: map[string]float32{
-				"midi_note": float32(midiNote),
-				"amp":       float32(f.velocity),
-				"modRatio":  modRatio,
-				"modIndex":  modIndex,
+				"midi_note":  float32(midiNote),
+				"amp":        float32(f.velocity),
+				"modRatio":   modRatio,
+				"modIndex":   modIndex,
+				"max_voices": 2,
 			},
 		},
 		Timing: events.Timing{

@@ -1,7 +1,7 @@
 // Setup script for Forbidden Sequencer SuperCollider integration
 // This script initializes Groups, SynthDefs, and audio buses
 // Synths are triggered directly by server commands from Go (port 57110)
-// Uses monophonic voices via groups that are freed and recreated on each event
+// Uses node-based voice management with synths group (100) and effects group (200)
 
 // Boot server if not already running
 s.waitForBoot({
@@ -18,14 +18,20 @@ s.waitForBoot({
   ~reverbBus = Bus(\audio, 10, 2, s); // fixed bus index 10, 2 channels
   "Created reverb bus: %".format(~reverbBus.index).postln;
 
-  // Free existing reverb synth if it exists
-  if (~reverb.notNil, {
-    ~reverb.free;
-  });
+  // Create groups with fixed IDs for proper execution order
+  // Group 100: synths (executes first)
+  // Group 200: effects (executes second, after synths)
+  s.sendMsg('/g_new', 100, 0, 0); // synths group, add to head of default group
+  s.sendMsg('/g_new', 200, 3, 100); // effects group, add after synths group
 
-  // Create reverb synth FIRST at the tail with a fixed node ID
-  // Using /s_new with fixed ID so we can reference it for ordering
-  s.sendMsg('/s_new', 'fdnReverb', 1000, 1, 0,
+  s.sync;
+
+  "Created synths group: 100".postln;
+  "Created effects group: 200".postln;
+
+  // Create reverb synth in the effects group (200)
+  // The reverb processes audio from bus 10 and outputs to master (bus 0)
+  s.sendMsg('/s_new', 'fdnReverb', 1000, 1, 200,
     'in', ~reverbBus.index,
     'out', 0,
     'size', 0.7,
@@ -37,56 +43,39 @@ s.waitForBoot({
 
   s.sync; // Wait for reverb to be created
 
-  // Create monophonic voice groups with fixed IDs using server commands
-  // These IDs must match the group mappings in Go adapter
-  // /g_new [nodeID, addAction, targetID]
-  // addAction: 2 = add before target (place before reverb synth)
-  // This ensures all voice groups execute BEFORE the reverb
-  s.sendMsg('/g_new', 100, 2, 1000); // kick group - before reverb
-  s.sendMsg('/g_new', 101, 2, 1000); // snare group - before reverb
-  s.sendMsg('/g_new', 102, 2, 1000); // hihat group - before reverb
-  s.sendMsg('/g_new', 103, 2, 1000); // fm1 group - before reverb
-  s.sendMsg('/g_new', 104, 2, 1000); // fm2 group - before reverb
-  s.sendMsg('/g_new', 105, 2, 1000); // arp group - before reverb
-
-  "Reverb initialized on bus %".format(~reverbBus.index).postln;
-
-  "Groups created with fixed IDs:".postln;
-  "  Kick group: 100".postln;
-  "  Snare group: 101".postln;
-  "  Hihat group: 102".postln;
-  "  FM1 group: 103".postln;
-  "  FM2 group: 104".postln;
-  "  Arp group: 105".postln;
+  "Reverb initialized on bus % with node ID 1000".format(~reverbBus.index).postln;
 
   // Server is now ready to receive commands on port 57110
   // Go adapter will send timestamped bundles containing:
-  // 1. /g_freeAll [groupID] - free all synths in group
-  // 2. /s_new [synthDefName, -1, 1, groupID, controls...] - create new synth
+  // 1. /n_free [nodeID] - free specific node (voice stealing)
+  // 2. /s_new [synthDefName, nodeID, 0, 100, controls...] - create new synth
+  //
+  // Node tree structure:
+  //   Group 0 (RootNode)
+  //     ├── Group 100 (synths) - voice synths added here, executes first
+  //     └── Group 200 (effects) - reverb and other effects, executes second
+  //         └── Node 1000 (fdnReverb) - processes bus 10 → bus 0
   //
   // SynthDef mappings (set in Go):
   //   kick  -> bd (bass drum)
   //   snare -> cp (clap/snare)
   //   hihat -> hh (hihat)
-  //   fm1   -> fm2op (2-op FM synth)
-  //   fm2   -> fm2op (2-op FM synth)
-  //   arp   -> arp (detuned squares)
-  //
-  // Group ID mappings (set in Go):
-  //   kick  -> 100
-  //   snare -> 101
-  //   hihat -> 102
-  //   fm1   -> 103
-  //   fm2   -> 104
-  //   arp   -> 105
+  //   fm    -> fm2op (2-op FM synth, max_voices=2)
+  //   arp   -> arp (pulse through lowpass)
   //
   // Bus ID mappings (set in Go):
   //   kick  -> 0 (master out)
   //   snare -> 10 (reverb bus)
   //   hihat -> 0 (master out)
-  //   fm1   -> 10 (reverb bus)
-  //   fm2   -> 10 (reverb bus)
+  //   fm    -> 10 (reverb bus)
   //   arp   -> 10 (reverb bus)
+  //
+  // Voice management:
+  //   - Adapter assigns unique node IDs (2000+) and tracks active nodes per event
+  //   - All voice synths added to group 100 with addAction 0 (head)
+  //   - max_voices parameter (defaults to 1) limits polyphony per event
+  //   - Voice stealing: oldest active node freed when limit exceeded
+  //
 
   "SuperCollider setup complete".postln;
   "Server listening on port 57110 for direct server commands".postln;

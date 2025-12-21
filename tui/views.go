@@ -192,17 +192,6 @@ func (m Model) viewSettings() string {
 			b.WriteString("\n")
 		}
 
-		// Display Group ID mappings
-		groups := m.SCAdapter.GetAllGroupMappings()
-		if len(groups) > 0 {
-			b.WriteString(StatusStyle.Render("Group IDs:"))
-			b.WriteString("\n")
-			for eventName, groupID := range groups {
-				b.WriteString(fmt.Sprintf("  %s → %d\n", eventName, groupID))
-			}
-			b.WriteString("\n")
-		}
-
 		// Display Bus mappings
 		buses := m.SCAdapter.GetAllBusMappings()
 		if len(buses) > 0 {

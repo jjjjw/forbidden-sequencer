@@ -43,8 +43,8 @@ func NewRandRhythmSequencer(baseTickDuration time.Duration, phraseLength int, ad
 	)
 
 	// FM voice 1: melodic minor scale, middle register
+	// Both FM patterns use event name "fm" with max_voices=2
 	fm1Pattern := randpatterns.NewFMPattern(
-		"fm1",
 		0.5,                   // velocity
 		60,                    // root note (C4)
 		lib.MelodicMinorScale, // melodic minor scale
@@ -54,7 +54,6 @@ func NewRandRhythmSequencer(baseTickDuration time.Duration, phraseLength int, ad
 
 	// FM voice 2: melodic minor scale, higher register
 	fm2Pattern := randpatterns.NewFMPattern(
-		"fm2",
 		0.4,                   // velocity (slightly quieter)
 		72,                    // root note (C5, one octave up)
 		lib.MelodicMinorScale, // melodic minor scale
