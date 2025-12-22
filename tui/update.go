@@ -48,8 +48,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global keys
 		switch msg.String() {
 		case "ctrl+c":
-			if m.ActiveSequencer != nil {
-				m.ActiveSequencer.Stop()
+			if m.ActiveModule != nil {
+				m.ActiveModule.Stop()
 			}
 			return m, tea.Quit
 		}
@@ -68,13 +68,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// If showing sequencer list, handle list navigation
-	if m.ShowingSequencerList {
+	if m.ShowingModuleList {
 		return m.updateSequencerList(msg)
 	}
 
 	// Try sequencer-specific input first
-	if m.ActiveSequencer != nil {
-		if m.ActiveSequencer.HandleInput(msg) {
+	if m.ActiveModule != nil {
+		if m.ActiveModule.HandleInput(msg) {
 			return m, nil
 		}
 	}
@@ -82,26 +82,42 @@ func (m Model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global keys
 	switch msg.String() {
 	case "q", "esc":
-		if m.ActiveSequencer != nil {
-			m.ActiveSequencer.Stop()
+		if m.ActiveModule != nil {
+			m.ActiveModule.Stop()
 		}
 		return m, tea.Quit
 
 	case " ", "p":
-		if m.ActiveSequencer != nil {
+		if m.ActiveModule != nil {
 			if m.IsPlaying {
-				m.ActiveSequencer.Stop()
+				m.ActiveModule.Stop()
 				m.IsPlaying = false
 			} else {
-				m.ActiveSequencer.Play()
+				m.ActiveModule.Play()
 				m.IsPlaying = true
 			}
 		}
 
+	case "j", "down":
+		// Global: increase tick duration (slow down)
+		if m.Conductor != nil {
+			currentDuration := m.Conductor.GetTickDuration()
+			newDuration := time.Duration(float64(currentDuration) * 1.1)
+			m.Conductor.SetTickDuration(newDuration)
+		}
+
+	case "k", "up":
+		// Global: decrease tick duration (speed up)
+		if m.Conductor != nil {
+			currentDuration := m.Conductor.GetTickDuration()
+			newDuration := time.Duration(float64(currentDuration) / 1.1)
+			m.Conductor.SetTickDuration(newDuration)
+		}
+
 	case "tab":
 		// Toggle sequencer list
-		m.ShowingSequencerList = true
-		m.SelectedSequencerIndex = m.ActiveSequencerIndex
+		m.ShowingModuleList = true
+		m.SelectedModuleIndex = m.ActiveModuleIndex
 
 	case "s":
 		// Go to settings
@@ -115,34 +131,42 @@ func (m Model) updateSequencerList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc":
 		// Close sequencer list without switching
-		m.ShowingSequencerList = false
+		m.ShowingModuleList = false
 
 	case "up", "k":
-		if m.SelectedSequencerIndex > 0 {
-			m.SelectedSequencerIndex--
+		if m.SelectedModuleIndex > 0 {
+			m.SelectedModuleIndex--
 		}
 
 	case "down", "j":
-		if m.SelectedSequencerIndex < len(m.SequencerFactories)-1 {
-			m.SelectedSequencerIndex++
+		if m.SelectedModuleIndex < len(m.ModuleFactories)-1 {
+			m.SelectedModuleIndex++
 		}
 
 	case "enter":
-		// Switch to selected sequencer
-		if m.SelectedSequencerIndex != m.ActiveSequencerIndex {
-			// Stop and destroy current sequencer
-			if m.ActiveSequencer != nil {
-				m.ActiveSequencer.Stop()
-				m.ActiveSequencer = nil
+		// Switch to selected module
+		if m.SelectedModuleIndex != m.ActiveModuleIndex {
+			// Stop current module patterns
+			wasPlaying := m.IsPlaying
+			if m.ActiveModule != nil {
+				m.ActiveModule.Stop()
 			}
 
-			// Create new sequencer from factory
-			m.ActiveSequencerIndex = m.SelectedSequencerIndex
-			if m.ActiveSequencerIndex < len(m.SequencerFactories) && m.SCAdapter != nil {
-				factory := m.SequencerFactories[m.ActiveSequencerIndex]
-				m.ActiveSequencer = factory.Create(m.SCAdapter, m.EventChan)
-				m.ActiveSequencer.Start()
-				m.IsPlaying = false
+			// Create new module from factory
+			m.ActiveModuleIndex = m.SelectedModuleIndex
+			if m.ActiveModuleIndex < len(m.ModuleFactories) && m.Conductor != nil {
+				factory := m.ModuleFactories[m.ActiveModuleIndex]
+				m.ActiveModule = factory.Create(m.Conductor)
+
+				// Load new patterns into global sequencer
+				m.Sequencer.SetPatterns(m.ActiveModule.GetPatterns())
+
+				// Resume playing if was playing before
+				if wasPlaying {
+					m.ActiveModule.Play()
+				} else {
+					m.IsPlaying = false
+				}
 
 				// Save to settings
 				m.Settings.SelectedSequencer = factory.GetName()
@@ -151,7 +175,7 @@ func (m Model) updateSequencerList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		m.ShowingSequencerList = false
+		m.ShowingModuleList = false
 	}
 
 	return m, nil

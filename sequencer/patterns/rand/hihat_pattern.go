@@ -1,8 +1,7 @@
-package modulated
+package rand
 
 import (
 	"fmt"
-	"time"
 
 	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
@@ -19,16 +18,18 @@ import (
 // Uses MIDI note 42 (closed hihat)
 // Silences after snare fires in the phrase
 type HihatPattern struct {
-	conductor *conductors.ModulatedRhythmConductor
-	name      string           // event name
-	velocity  float64          // event velocity
-	paused    bool
-	chain     *lib.MarkovChain // Markov chain for play/silent decisions
+	conductor    *conductors.Conductor
+	snarePattern *SnarePattern    // reference to snare pattern for trigger state
+	name         string           // event name
+	velocity     float64          // event velocity
+	paused       bool
+	chain        *lib.MarkovChain // Markov chain for play/silent decisions
 }
 
 // NewHihatPattern creates a new hihat pattern
 func NewHihatPattern(
-	conductor *conductors.ModulatedRhythmConductor,
+	conductor *conductors.Conductor,
+	snarePattern *SnarePattern,
 	name string,
 	velocity float64,
 ) *HihatPattern {
@@ -45,11 +46,12 @@ func NewHihatPattern(
 	chain.SetTransitionProbability("silent", "playing", 0.5)
 
 	return &HihatPattern{
-		conductor: conductor,
-		name:      name,
-		velocity:  velocity,
-		paused:    true,
-		chain:     chain,
+		conductor:    conductor,
+		snarePattern: snarePattern,
+		name:         name,
+		velocity:     velocity,
+		paused:       true,
+		chain:        chain,
 	}
 }
 
@@ -73,19 +75,19 @@ func (h *HihatPattern) String() string {
 	return fmt.Sprintf("%s (markov: 30%% play, 50%% start)", h.name)
 }
 
-// GetScheduledEventsForTick implements the Pattern interface
-func (h *HihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDuration time.Duration) []events.ScheduledEvent {
+// GetEventsForTick implements the Pattern interface
+func (h *HihatPattern) GetEventsForTick(tick int64) []events.TickEvent {
 	// When paused, return no events
 	if h.paused {
 		return nil
 	}
 
-	// Get tick position from conductor
-	nextTickInPhrase := h.conductor.GetNextTickInPhrase()
-	snareTriggerTick := h.conductor.GetSnareTriggerTick()
+	// Get tick position from snare pattern
+	tickInPhrase := h.snarePattern.GetCurrentTickInPhrase()
+	snareTriggerTick := h.snarePattern.GetSnareTriggerTick()
 
 	// If snare will trigger and we're at or past the snare tick, stay silent
-	if h.conductor.WillSnareTrigger() && nextTickInPhrase >= snareTriggerTick {
+	if h.snarePattern.WillSnareTrigger() && tickInPhrase >= snareTriggerTick {
 		return nil
 	}
 
@@ -97,10 +99,7 @@ func (h *HihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 
 	// Only fire if we're in the "playing" state
 	if state == "playing" {
-		// Fire event with duration = 75% of tick
-		noteDuration := time.Duration(float64(tickDuration) * 0.75)
-
-		return []events.ScheduledEvent{{
+		return []events.TickEvent{{
 			Event: events.Event{
 				Name: h.name,
 				Type: events.EventTypeNote,
@@ -108,10 +107,9 @@ func (h *HihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 					"amp": float32(h.velocity),
 				},
 			},
-			Timing: events.Timing{
-				Timestamp: nextTickTime,
-				Duration:  noteDuration,
-			},
+			Tick:          tick,
+			OffsetPercent: 0.0,
+			DurationTicks: 0.75,
 		}}
 	}
 

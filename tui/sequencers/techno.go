@@ -2,15 +2,16 @@ package sequencers
 
 import (
 	"fmt"
+	"time"
 
-	"forbidden_sequencer/sequencer/adapters"
-	"forbidden_sequencer/sequencer/events"
+	"forbidden_sequencer/sequencer/conductors"
+	"forbidden_sequencer/sequencer/modules"
 	seqlib "forbidden_sequencer/sequencer/sequencers"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// TechnoFactory creates techno sequencers
+// TechnoFactory creates techno modules
 type TechnoFactory struct{}
 
 // GetName returns the display name
@@ -19,26 +20,34 @@ func (f *TechnoFactory) GetName() string {
 }
 
 // Create creates a new techno config instance
-func (f *TechnoFactory) Create(adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) SequencerConfig {
-	return NewTechnoConfig(adapter, eventChan)
+func (f *TechnoFactory) Create(conductor *conductors.Conductor) ModuleConfig {
+	return NewTechnoConfig(conductor)
 }
 
-// TechnoConfig wraps a techno sequencer
+// TechnoConfig wraps a techno module
 type TechnoConfig struct {
-	sequencer *seqlib.Sequencer
-	bpm       float64
+	patterns []seqlib.Pattern
+	bpm      float64
 }
 
 // NewTechnoConfig creates a new techno config
-func NewTechnoConfig(adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) *TechnoConfig {
-	// Create sequencer with default settings
-	// BPM: 140
+func NewTechnoConfig(conductor *conductors.Conductor) *TechnoConfig {
+	// Create module patterns
+	// BPM: 140, ticksPerBeat: 4 (16th notes)
 	bpm := 140.0
-	sequencer := seqlib.NewTechnoSequencer(bpm, adapter, eventChan)
+	ticksPerBeat := 4
+
+	// Calculate tick duration from BPM and set on conductor
+	beatsPerSecond := bpm / 60.0
+	ticksPerSecond := beatsPerSecond * float64(ticksPerBeat)
+	tickDuration := time.Duration(float64(time.Second) / ticksPerSecond)
+	conductor.SetTickDuration(tickDuration)
+
+	patterns := modules.NewTechnoModule(conductor, ticksPerBeat)
 
 	return &TechnoConfig{
-		sequencer: sequencer,
-		bpm:       bpm,
+		patterns: patterns,
+		bpm:      bpm,
 	}
 }
 
@@ -47,9 +56,9 @@ func (c *TechnoConfig) GetName() string {
 	return "Techno"
 }
 
-// GetKeybindings returns the sequencer-specific controls
+// GetKeybindings returns the module-specific controls
 func (c *TechnoConfig) GetKeybindings() string {
-	return "" // No sequencer-specific controls for now
+	return ""
 }
 
 // GetStatus returns the current state
@@ -57,23 +66,26 @@ func (c *TechnoConfig) GetStatus() string {
 	return fmt.Sprintf("BPM: %.1f", c.bpm)
 }
 
-// HandleInput processes sequencer-specific input
+// HandleInput processes module-specific input
 func (c *TechnoConfig) HandleInput(msg tea.KeyMsg) bool {
-	// No sequencer-specific input for now
 	return false
 }
 
-// Start starts the sequencer
-func (c *TechnoConfig) Start() {
-	c.sequencer.Start()
+// GetPatterns returns the patterns
+func (c *TechnoConfig) GetPatterns() []seqlib.Pattern {
+	return c.patterns
 }
 
-// Stop stops the sequencer
+// Stop stops the patterns
 func (c *TechnoConfig) Stop() {
-	c.sequencer.Stop()
+	for _, p := range c.patterns {
+		p.Stop()
+	}
 }
 
 // Play resumes playback
 func (c *TechnoConfig) Play() {
-	c.sequencer.Play()
+	for _, p := range c.patterns {
+		p.Play()
+	}
 }

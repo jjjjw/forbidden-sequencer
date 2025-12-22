@@ -4,9 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"forbidden_sequencer/sequencer/adapters"
+	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
+	seqlib "forbidden_sequencer/sequencer/sequencers"
 	"forbidden_sequencer/tui"
 	"forbidden_sequencer/tui/sequencers"
 
@@ -21,7 +24,7 @@ func initialModel() tui.Model {
 	if err != nil {
 		fmt.Printf("Failed to load settings, using defaults: %v\n", err)
 		settings = &tui.Settings{
-			SelectedSequencer: "Modulated Rhythm", // default
+			SelectedSequencer: "Ramp Time", // default
 		}
 	}
 
@@ -35,39 +38,53 @@ func initialModel() tui.Model {
 		}
 	}
 
+	// Create event channel (owned by model)
+	eventChan := make(chan events.ScheduledEvent, 100)
+
+	// Create global conductor with default tick duration (100ms)
+	conductor := conductors.NewConductor(100 * time.Millisecond)
+
+	// Create global sequencer (with empty patterns initially)
+	sequencer := seqlib.NewSequencer(nil, conductor, scAdapter, eventChan, *debug)
+
+	// Start the sequencer (this starts the runTickLoop)
+	sequencer.Start()
+
 	m := tui.Model{
-		Settings:     settings,
-		Screen:       tui.ScreenMain,
-		SCAdapter:    scAdapter,
-		Debug:        *debug,
+		Settings:  settings,
+		Screen:    tui.ScreenMain,
+		SCAdapter: scAdapter,
+		Debug:     *debug,
+		Conductor: conductor,
+		Sequencer: sequencer,
+		EventChan: eventChan,
 	}
 
-	// Create event channel (owned by model)
-	m.EventChan = make(chan events.ScheduledEvent, 100)
-
-	// Create sequencer factories
-	m.SequencerFactories = []sequencers.SequencerFactory{
+	// Create module factories
+	m.ModuleFactories = []sequencers.ModuleFactory{
 		&sequencers.ModulatedRhythmFactory{},
 		&sequencers.RandRhythmFactory{},
 		&sequencers.ArpFactory{},
 		&sequencers.TechnoFactory{},
+		&sequencers.MarkovChordFactory{},
 	}
 
-	// Find and activate the saved sequencer
-	m.ActiveSequencerIndex = 0
-	for i, factory := range m.SequencerFactories {
+	// Find and activate the saved module
+	m.ActiveModuleIndex = 0
+	for i, factory := range m.ModuleFactories {
 		if factory.GetName() == settings.SelectedSequencer {
-			m.ActiveSequencerIndex = i
+			m.ActiveModuleIndex = i
 			break
 		}
 	}
 
-	// Create and initialize active sequencer (starts paused)
-	// Use SuperCollider adapter for server-side scheduling
-	if m.ActiveSequencerIndex < len(m.SequencerFactories) {
-		factory := m.SequencerFactories[m.ActiveSequencerIndex]
-		m.ActiveSequencer = factory.Create(scAdapter, m.EventChan)
-		m.ActiveSequencer.Start()
+	// Create and initialize active module (starts paused)
+	if m.ActiveModuleIndex < len(m.ModuleFactories) {
+		factory := m.ModuleFactories[m.ActiveModuleIndex]
+		m.ActiveModule = factory.Create(conductor)
+
+		// Load the module's patterns into the global sequencer
+		sequencer.SetPatterns(m.ActiveModule.GetPatterns())
 	}
 
 	return m

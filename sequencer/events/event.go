@@ -47,3 +47,11 @@ type ScheduledEvent struct {
 	Event  Event
 	Timing Timing
 }
+
+// TickEvent represents an event in logical tick time (from patterns)
+type TickEvent struct {
+	Event         Event
+	Tick          int64   // which tick this event fires on
+	OffsetPercent float64 // offset from tick start (0.0 = on tick, 0.5 = halfway to next tick)
+	DurationTicks float64 // duration in ticks (can be fractional, e.g., 0.75 for 75% of a tick)
+}

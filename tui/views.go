@@ -21,7 +21,7 @@ func (m Model) View() string {
 
 func (m Model) viewMain() string {
 	// If showing sequencer list, show overlay
-	if m.ShowingSequencerList {
+	if m.ShowingModuleList {
 		return m.viewSequencerList()
 	}
 
@@ -32,14 +32,24 @@ func (m Model) viewMain() string {
 	left.WriteString(TitleStyle.Render("Forbidden Sequencer"))
 	left.WriteString("\n\n")
 
-	// Active sequencer name
-	if m.ActiveSequencer != nil {
-		left.WriteString(StatusStyle.Render("Sequencer: " + m.ActiveSequencer.GetName()))
+	// Active module name
+	if m.ActiveModule != nil {
+		left.WriteString(StatusStyle.Render("Module: " + m.ActiveModule.GetName()))
 		left.WriteString("\n\n")
 
-		// Sequencer status
-		left.WriteString(StatusStyle.Render(m.ActiveSequencer.GetStatus()))
-		left.WriteString("\n\n")
+		// Global tempo
+		if m.Conductor != nil {
+			tickDuration := m.Conductor.GetTickDuration()
+			left.WriteString(StatusStyle.Render(fmt.Sprintf("Tick Duration: %.0fms", float64(tickDuration.Milliseconds()))))
+			left.WriteString("\n\n")
+		}
+
+		// Module status
+		status := m.ActiveModule.GetStatus()
+		if status != "" {
+			left.WriteString(StatusStyle.Render(status))
+			left.WriteString("\n\n")
+		}
 	}
 
 	// Error display
@@ -61,8 +71,8 @@ func (m Model) viewMain() string {
 	var helpItems []string
 
 	// Sequencer-specific keybindings
-	if m.ActiveSequencer != nil {
-		sequencerHelp := m.ActiveSequencer.GetKeybindings()
+	if m.ActiveModule != nil {
+		sequencerHelp := m.ActiveModule.GetKeybindings()
 		if sequencerHelp != "" {
 			helpItems = append(helpItems, sequencerHelp)
 		}
@@ -70,6 +80,7 @@ func (m Model) viewMain() string {
 
 	// Global keybindings
 	globalHelp := []string{
+		"[j/k] Tick Duration",
 		"[space/p] Play/Mute",
 		"[tab] Switch Sequencer",
 		"[s] Settings",
@@ -92,15 +103,15 @@ func (m Model) viewSequencerList() string {
 	b.WriteString(TitleStyle.Render("Select Sequencer"))
 	b.WriteString("\n\n")
 
-	for i, factory := range m.SequencerFactories {
+	for i, factory := range m.ModuleFactories {
 		cursor := "  "
 		style := lipgloss.NewStyle()
-		if i == m.SelectedSequencerIndex {
+		if i == m.SelectedModuleIndex {
 			cursor = "> "
 			style = SelectedStyle
 		}
 		current := ""
-		if i == m.ActiveSequencerIndex {
+		if i == m.ActiveModuleIndex {
 			current = " (active)"
 		}
 		b.WriteString(style.Render(fmt.Sprintf("%s%s%s", cursor, factory.GetName(), current)))

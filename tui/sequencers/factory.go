@@ -1,15 +1,14 @@
 package sequencers
 
 import (
-	"forbidden_sequencer/sequencer/adapters"
-	"forbidden_sequencer/sequencer/events"
+	"forbidden_sequencer/sequencer/conductors"
 )
 
-// SequencerFactory creates sequencer configs on demand
-type SequencerFactory interface {
-	// GetName returns the display name for this sequencer type
+// ModuleFactory creates module configs on demand
+type ModuleFactory interface {
+	// GetName returns the display name for this module type
 	GetName() string
 
-	// Create creates a new sequencer config instance
-	Create(adapter adapters.EventAdapter, eventChan chan<- events.ScheduledEvent) SequencerConfig
+	// Create creates a new module config instance
+	Create(conductor *conductors.Conductor) ModuleConfig
 }

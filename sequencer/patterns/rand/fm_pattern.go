@@ -1,8 +1,7 @@
-package modulated
+package rand
 
 import (
 	"math/rand"
-	"time"
 
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
@@ -60,8 +59,8 @@ func (f *FMPattern) String() string {
 	return "fm FM (random)"
 }
 
-// GetScheduledEventsForTick implements the Pattern interface
-func (f *FMPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDuration time.Duration) []events.ScheduledEvent {
+// GetEventsForTick implements the Pattern interface
+func (f *FMPattern) GetEventsForTick(tick int64) []events.TickEvent {
 	// When paused, return no events
 	if f.paused {
 		return nil
@@ -80,8 +79,7 @@ func (f *FMPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurati
 	midiNote := f.scale.NoteAt(f.rootNote, degree)
 
 	// Randomize duration: 75% to 200% of tick duration
-	durationFactor := 0.75 + f.rng.Float64()*1.25 // 0.75 to 2.0
-	noteDuration := time.Duration(float64(tickDuration) * durationFactor)
+	durationTicks := 0.75 + f.rng.Float64()*1.25 // 0.75 to 2.0 ticks
 
 	// Randomize FM ratio: common ratios for harmonicity
 	// Ratios: 0.5, 1, 1.5, 2, 3, 4, 5, 7
@@ -91,7 +89,7 @@ func (f *FMPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurati
 	// Randomize FM modulation index (depth): 0.1 to 3.0
 	modIndex := float32(0.1 + f.rng.Float64()*2.9) // 0.1 to 3.0
 
-	return []events.ScheduledEvent{{
+	return []events.TickEvent{{
 		Event: events.Event{
 			Name: "fm",
 			Type: events.EventTypeNote,
@@ -103,9 +101,8 @@ func (f *FMPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurati
 				"max_voices": 2,
 			},
 		},
-		Timing: events.Timing{
-			Timestamp: nextTickTime,
-			Duration:  noteDuration,
-		},
+		Tick:          tick,
+		OffsetPercent: 0.0,
+		DurationTicks: durationTicks,
 	}}
 }

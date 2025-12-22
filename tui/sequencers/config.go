@@ -1,30 +1,32 @@
 package sequencers
 
 import (
+	seqlib "forbidden_sequencer/sequencer/sequencers"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// SequencerConfig wraps a sequencer instance and provides UI metadata
-type SequencerConfig interface {
-	// GetName returns the display name for the sequencer
+// ModuleConfig wraps a module's patterns and provides UI metadata
+type ModuleConfig interface {
+	// GetName returns the display name for the module
 	GetName() string
 
-	// GetKeybindings returns a description of sequencer-specific controls
+	// GetKeybindings returns a description of module-specific controls
 	GetKeybindings() string
 
-	// GetStatus returns the current state/info of the sequencer
+	// GetStatus returns the current state/info of the module
 	GetStatus() string
 
-	// HandleInput processes sequencer-specific key input
+	// HandleInput processes module-specific key input
 	// Returns true if the input was handled, false otherwise
 	HandleInput(msg tea.KeyMsg) bool
 
-	// Start starts the sequencer
-	Start()
+	// GetPatterns returns the patterns for this module
+	GetPatterns() []seqlib.Pattern
 
-	// Stop stops the sequencer
+	// Stop stops all patterns
 	Stop()
 
-	// Play resumes playback
+	// Play resumes all patterns
 	Play()
 }

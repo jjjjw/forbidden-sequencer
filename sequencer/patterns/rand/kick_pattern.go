@@ -1,8 +1,7 @@
-package modulated
+package rand
 
 import (
 	"fmt"
-	"time"
 
 	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
@@ -13,19 +12,19 @@ import (
 // States: "playing" and "silent"
 // Silences after snare fires in the phrase
 type KickPattern struct {
-	conductor       *conductors.PhraseConductor
-	rhythmConductor *conductors.ModulatedRhythmConductor
-	name            string  // event name
-	frequency       float32 // frequency in Hz
-	velocity        float64 // event velocity
-	paused          bool
-	chain           *lib.MarkovChain // Markov chain for play/silent decisions
+	conductor    *conductors.Conductor
+	snarePattern *SnarePattern // reference to snare pattern for trigger state
+	name         string        // event name
+	frequency    float32       // frequency in Hz
+	velocity     float64       // event velocity
+	paused       bool
+	chain        *lib.MarkovChain // Markov chain for play/silent decisions
 }
 
 // NewKickPattern creates a new kick pattern
 func NewKickPattern(
-	conductor *conductors.PhraseConductor,
-	rhythmConductor *conductors.ModulatedRhythmConductor,
+	conductor *conductors.Conductor,
+	snarePattern *SnarePattern,
 	name string,
 	frequency float32,
 	velocity float64,
@@ -38,18 +37,18 @@ func NewKickPattern(
 	chain.SetTransitionProbability("playing", "playing", 0.5)
 	chain.SetTransitionProbability("playing", "silent", 0.5)
 
-	// When silent: 40% stay silent, 60% start playing
+	// When silent: 50% stay silent, 50% start playing
 	chain.SetTransitionProbability("silent", "silent", 0.5)
 	chain.SetTransitionProbability("silent", "playing", 0.5)
 
 	return &KickPattern{
-		conductor:       conductor,
-		rhythmConductor: rhythmConductor,
-		name:            name,
-		frequency:       frequency,
-		velocity:        velocity,
-		paused:          true,
-		chain:           chain,
+		conductor:    conductor,
+		snarePattern: snarePattern,
+		name:         name,
+		frequency:    frequency,
+		velocity:     velocity,
+		paused:       true,
+		chain:        chain,
 	}
 }
 
@@ -73,19 +72,19 @@ func (k *KickPattern) String() string {
 	return fmt.Sprintf("%s (markov: 50%% play, 50%% start)", k.name)
 }
 
-// GetScheduledEventsForTick implements the Pattern interface
-func (k *KickPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDuration time.Duration) []events.ScheduledEvent {
+// GetEventsForTick implements the Pattern interface
+func (k *KickPattern) GetEventsForTick(tick int64) []events.TickEvent {
 	// When paused, return no events
 	if k.paused {
 		return nil
 	}
 
-	// Get tick position from conductor
-	nextTickInPhrase := k.conductor.GetNextTickInPhrase()
-	snareTriggerTick := k.rhythmConductor.GetSnareTriggerTick()
+	// Get tick position from snare pattern
+	tickInPhrase := k.snarePattern.GetCurrentTickInPhrase()
+	snareTriggerTick := k.snarePattern.GetSnareTriggerTick()
 
 	// If snare will trigger and we're at or past the snare tick, stay silent
-	if k.rhythmConductor.WillSnareTrigger() && nextTickInPhrase >= snareTriggerTick {
+	if k.snarePattern.WillSnareTrigger() && tickInPhrase >= snareTriggerTick {
 		return nil
 	}
 
@@ -97,9 +96,7 @@ func (k *KickPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDura
 
 	// Only fire if we're in the "playing" state
 	if state == "playing" {
-		// Fire event with duration = 75% of tick
-		noteDuration := time.Duration(float64(tickDuration) * 0.75)
-		return []events.ScheduledEvent{{
+		return []events.TickEvent{{
 			Event: events.Event{
 				Name: k.name,
 				Type: events.EventTypeNote,
@@ -108,10 +105,9 @@ func (k *KickPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDura
 					"amp":  float32(k.velocity),
 				},
 			},
-			Timing: events.Timing{
-				Timestamp: nextTickTime,
-				Duration:  noteDuration,
-			},
+			Tick:          tick,
+			OffsetPercent: 0.0,
+			DurationTicks: 0.75,
 		}}
 	}
 

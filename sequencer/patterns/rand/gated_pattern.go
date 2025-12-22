@@ -1,8 +1,7 @@
-package modulated
+package rand
 
 import (
 	"fmt"
-	"time"
 
 	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
@@ -10,40 +9,48 @@ import (
 
 // GatedPattern fires events only when within a specified tick range of the phrase
 type GatedPattern struct {
-	conductor *conductors.PhraseConductor
-	name      string  // event name (e.g., "kick", "hihat")
-	note      uint8   // MIDI note number
-	velocity  float64 // event velocity
-	startTick int     // first tick in phrase when pattern fires (inclusive)
-	endTick   int     // last tick in phrase when pattern fires (exclusive)
-	paused    bool
+	conductor    *conductors.Conductor
+	name         string  // event name (e.g., "kick", "hihat")
+	note         uint8   // MIDI note number
+	velocity     float64 // event velocity
+	startTick    int     // first tick in phrase when pattern fires (inclusive)
+	endTick      int     // last tick in phrase when pattern fires (exclusive)
+	paused       bool
+	phraseLength int   // length of phrase in ticks
+	tickInPhrase int   // current tick within phrase
+	lastTick     int64 // last tick we saw
 }
 
 // NewGatedPattern creates a new gated pattern
 // startTick: first tick to fire (inclusive)
 // endTick: last tick to fire (exclusive)
 func NewGatedPattern(
-	conductor *conductors.PhraseConductor,
+	conductor *conductors.Conductor,
 	name string,
 	note uint8,
 	velocity float64,
 	startTick int,
 	endTick int,
+	phraseLength int,
 ) *GatedPattern {
 	return &GatedPattern{
-		conductor: conductor,
-		name:      name,
-		note:      note,
-		velocity:  velocity,
-		startTick: startTick,
-		endTick:   endTick,
-		paused:    true,
+		conductor:    conductor,
+		name:         name,
+		note:         note,
+		velocity:     velocity,
+		startTick:    startTick,
+		endTick:      endTick,
+		paused:       true,
+		phraseLength: phraseLength,
+		tickInPhrase: 0,
+		lastTick:     -1,
 	}
 }
 
 // Reset resets the pattern state
 func (g *GatedPattern) Reset() {
-	// No internal state to reset
+	g.tickInPhrase = 0
+	g.lastTick = -1
 }
 
 // Play resumes the pattern
@@ -61,23 +68,32 @@ func (g *GatedPattern) String() string {
 	return fmt.Sprintf("%s (ticks %d-%d)", g.name, g.startTick, g.endTick)
 }
 
-// GetScheduledEventsForTick implements the Pattern interface
-func (g *GatedPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDuration time.Duration) []events.ScheduledEvent {
+// updatePhrase tracks current position in phrase
+func (g *GatedPattern) updatePhrase(tick int64) {
+	if tick != g.lastTick {
+		g.tickInPhrase++
+		if g.tickInPhrase >= g.phraseLength {
+			g.tickInPhrase = 0
+		}
+		g.lastTick = tick
+	}
+}
+
+// GetEventsForTick implements the Pattern interface
+func (g *GatedPattern) GetEventsForTick(tick int64) []events.TickEvent {
+	// Update phrase position
+	g.updatePhrase(tick)
+
 	// When paused, return no events
 	if g.paused {
 		return nil
 	}
 
-	// Get tick position from conductor
-	nextTickInPhrase := g.conductor.GetNextTickInPhrase()
-
-	// Check if next tick is in the active range
-	inRange := nextTickInPhrase >= g.startTick && nextTickInPhrase < g.endTick
+	// Check if tick is in the active range
+	inRange := g.tickInPhrase >= g.startTick && g.tickInPhrase < g.endTick
 
 	if inRange {
-		// Fire event with duration = 75% of tick
-		noteDuration := time.Duration(float64(tickDuration) * 0.75)
-		return []events.ScheduledEvent{{
+		return []events.TickEvent{{
 			Event: events.Event{
 				Name: g.name,
 				Type: events.EventTypeNote,
@@ -86,10 +102,9 @@ func (g *GatedPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDur
 					"amp":       float32(g.velocity),
 				},
 			},
-			Timing: events.Timing{
-				Timestamp: nextTickTime,
-				Duration:  noteDuration,
-			},
+			Tick:          tick,
+			OffsetPercent: 0.0,
+			DurationTicks: 0.75,
 		}}
 	}
 

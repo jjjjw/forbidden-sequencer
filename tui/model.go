@@ -4,7 +4,9 @@ import (
 	"time"
 
 	"forbidden_sequencer/sequencer/adapters"
+	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
+	seqlib "forbidden_sequencer/sequencer/sequencers"
 	"forbidden_sequencer/tui/sequencers"
 )
 
@@ -37,12 +39,16 @@ type Model struct {
 	Err        error
 	Debug      bool // debug logging enabled
 
-	// Sequencer management
-	SequencerFactories     []sequencers.SequencerFactory // factory for each sequencer type
-	ActiveSequencer        sequencers.SequencerConfig    // currently active sequencer instance
-	ActiveSequencerIndex   int                           // index of active factory
-	ShowingSequencerList   bool                          // true when sequencer list overlay is visible
-	SelectedSequencerIndex int                           // for navigating sequencer list
+	// Global sequencer components (shared by all modules)
+	Conductor *conductors.Conductor
+	Sequencer *seqlib.Sequencer
+
+	// Module management
+	ModuleFactories     []sequencers.ModuleFactory // factory for each module type
+	ActiveModule        sequencers.ModuleConfig    // currently active module instance
+	ActiveModuleIndex   int                        // index of active factory
+	ShowingModuleList   bool                       // true when module list overlay is visible
+	SelectedModuleIndex int                        // for navigating module list
 
 	// Window size
 	Width  int

@@ -1,24 +1,67 @@
 package conductors
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
-// TickCallback is called on each tick
-type TickCallback func(tick int64)
+// Conductor implements a basic tick clock with adjustable tick duration
+type Conductor struct {
+	tickDuration time.Duration
+	lastTickTime time.Time
+	mu           sync.RWMutex // protects tickDuration
+}
 
-// Conductor is a minimal tick-based clock interface
-// Implementations may add domain-specific time concepts (e.g., beats, measures)
-type Conductor interface {
-	// GetTickDuration returns the duration of a single tick
-	GetTickDuration() time.Duration
+// NewConductor creates a new conductor
+func NewConductor(tickDuration time.Duration) *Conductor {
+	return &Conductor{
+		tickDuration: tickDuration,
+	}
+}
 
-	// GetNextTickTime returns the absolute wall-clock time of the next tick
-	GetNextTickTime() time.Time
+// GetTickDuration returns the current tick duration
+func (c *Conductor) GetTickDuration() time.Duration {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.tickDuration
+}
 
-	// Start begins ticking (runs continuously once started)
-	Start()
+// GetLastTickTime returns the time of the last tick
+func (c *Conductor) GetLastTickTime() time.Time {
+	return c.lastTickTime
+}
 
-	// Ticks returns a channel that emits on each tick
-	// Implementation note: Each call to Ticks() should return a fresh channel
-	// to support multiple subscribers. Store channels in a slice and notify all on each tick.
-	Ticks() <-chan struct{}
+// SetTickDuration sets a new tick duration
+func (c *Conductor) SetTickDuration(duration time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.tickDuration = duration
+}
+
+// GetNextTickTime returns the absolute wall-clock time of the next tick
+func (c *Conductor) GetNextTickTime() time.Time {
+	return c.lastTickTime.Add(c.GetTickDuration())
+}
+
+// Start begins ticking continuously
+func (c *Conductor) Start() {
+	now := time.Now()
+	c.lastTickTime = now
+	c.scheduleNextTick()
+}
+
+// scheduleNextTick schedules the next tick using AfterFunc
+func (c *Conductor) scheduleNextTick() {
+	nextTickTime := c.GetNextTickTime()
+	delay := time.Until(nextTickTime)
+
+	time.AfterFunc(delay, func() {
+		c.advanceTick()
+		c.scheduleNextTick()
+	})
+}
+
+// advanceTick increments the tick counter
+func (c *Conductor) advanceTick() {
+	c.lastTickTime = c.lastTickTime.Add(c.GetTickDuration())
 }

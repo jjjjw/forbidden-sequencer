@@ -2,7 +2,6 @@ package arp
 
 import (
 	"fmt"
-	"time"
 
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
@@ -14,13 +13,13 @@ const RestValue = -1000
 // ArpPattern plays a monophonic arpeggio sequence based on scale degrees
 // Sequence values are scale degree indexes, with RestValue (-1000) representing rests
 type ArpPattern struct {
-	name        string     // event name
-	sequence    []int      // scale degree indexes or RestValue for rests
-	scale       lib.Scale  // musical scale to use
-	rootNote    uint8      // base MIDI note
-	transpose   int        // semitone offset (for octave/fifth shifts)
-	currentStep int        // current position in sequence
-	velocity    float64    // note velocity
+	name        string    // event name
+	sequence    []int     // scale degree indexes or RestValue for rests
+	scale       lib.Scale // musical scale to use
+	rootNote    uint8     // base MIDI note
+	transpose   int       // semitone offset (for octave/fifth shifts)
+	currentStep int       // current position in sequence
+	velocity    float64   // note velocity
 	paused      bool
 }
 
@@ -94,8 +93,8 @@ func (a *ArpPattern) String() string {
 		a.name, a.rootNote, a.transpose, a.currentStep, len(a.sequence))
 }
 
-// GetScheduledEventsForTick implements the Pattern interface
-func (a *ArpPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDuration time.Duration) []events.ScheduledEvent {
+// GetEventsForTick implements the Pattern interface
+func (a *ArpPattern) GetEventsForTick(tick int64) []events.TickEvent {
 	// When paused, return no events
 	if a.paused {
 		return nil
@@ -115,16 +114,15 @@ func (a *ArpPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurat
 	// Check if this is a rest
 	if currentValue == RestValue {
 		// Return rest event
-		return []events.ScheduledEvent{{
+		return []events.TickEvent{{
 			Event: events.Event{
 				Name:   a.name,
 				Type:   events.EventTypeRest,
 				Params: map[string]float32{},
 			},
-			Timing: events.Timing{
-				Timestamp: nextTickTime,
-				Duration:  tickDuration,
-			},
+			Tick:          tick,
+			OffsetPercent: 0.0,
+			DurationTicks: 1.0,
 		}}
 	}
 
@@ -140,10 +138,7 @@ func (a *ArpPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurat
 		transposedNote = 127
 	}
 
-	// Fire note with duration = 90% of tick
-	noteDuration := time.Duration(float64(tickDuration) * 0.9)
-
-	return []events.ScheduledEvent{{
+	return []events.TickEvent{{
 		Event: events.Event{
 			Name: a.name,
 			Type: events.EventTypeNote,
@@ -152,9 +147,8 @@ func (a *ArpPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDurat
 				"amp":       float32(a.velocity),
 			},
 		},
-		Timing: events.Timing{
-			Timestamp: nextTickTime,
-			Duration:  noteDuration,
-		},
+		Tick:          tick,
+		OffsetPercent: 0.0,
+		DurationTicks: 0.9, // 90% of tick
 	}}
 }

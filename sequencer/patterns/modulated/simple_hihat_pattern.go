@@ -2,7 +2,6 @@ package modulated
 
 import (
 	"fmt"
-	"time"
 
 	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
@@ -10,32 +9,40 @@ import (
 
 // SimpleHihatPattern fires hihat events in the first half of the phrase (0-50%)
 type SimpleHihatPattern struct {
-	conductor    *conductors.PhraseConductor
-	name         string  // event name
-	velocity     float64 // event velocity
-	subdivision  int     // number of times to fire per tick
-	paused       bool
+	conductor         *conductors.Conductor
+	name              string  // event name
+	velocity          float64 // event velocity
+	subdivision       int     // number of times to fire per tick
+	paused            bool
+	phraseLength      int   // length of phrase in ticks
+	tickInPhrase      int   // current tick within phrase
+	lastTick          int64 // last tick we saw
 }
 
 // NewSimpleHihatPattern creates a new simple hihat pattern
 func NewSimpleHihatPattern(
-	conductor *conductors.PhraseConductor,
+	conductor *conductors.Conductor,
 	name string,
 	velocity float64,
 	subdivision int,
+	phraseLength int,
 ) *SimpleHihatPattern {
 	return &SimpleHihatPattern{
-		conductor:   conductor,
-		name:        name,
-		velocity:    velocity,
-		subdivision: subdivision,
-		paused:      true,
+		conductor:    conductor,
+		name:         name,
+		velocity:     velocity,
+		subdivision:  subdivision,
+		paused:       true,
+		phraseLength: phraseLength,
+		tickInPhrase: 0,
+		lastTick:     -1,
 	}
 }
 
 // Reset resets the pattern state
 func (h *SimpleHihatPattern) Reset() {
-	// No state to reset
+	h.tickInPhrase = 0
+	h.lastTick = -1
 }
 
 // Play resumes the pattern
@@ -58,34 +65,44 @@ func (h *SimpleHihatPattern) String() string {
 	return fmt.Sprintf("%s (0-50%% of phrase)", h.name)
 }
 
-// GetScheduledEventsForTick implements the Pattern interface
-func (h *SimpleHihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDuration time.Duration) []events.ScheduledEvent {
+// updatePhrase tracks current position in phrase
+func (h *SimpleHihatPattern) updatePhrase(tick int64) {
+	if tick != h.lastTick {
+		h.tickInPhrase++
+		if h.tickInPhrase >= h.phraseLength {
+			h.tickInPhrase = 0
+		}
+		h.lastTick = tick
+	}
+}
+
+// GetEventsForTick implements the Pattern interface
+func (h *SimpleHihatPattern) GetEventsForTick(tick int64) []events.TickEvent {
+	// Update phrase position
+	h.updatePhrase(tick)
+
 	// When paused, return no events
 	if h.paused {
 		return nil
 	}
 
-	// Get tick position from conductor
-	nextTickInPhrase := h.conductor.GetNextTickInPhrase()
-	phraseLength := h.conductor.GetPhraseLength()
-
 	// Fire if in first half of phrase (0-50%)
-	if float64(nextTickInPhrase) < float64(phraseLength)*0.5 {
+	if float64(h.tickInPhrase) < float64(h.phraseLength)*0.5 {
 		// Always use closed hihat (MIDI note 42)
 		note := uint8(42)
 
 		// Generate events based on subdivision
-		var scheduledEvents []events.ScheduledEvent
-
-		// Calculate time between subdivisions and duration for each note
-		subdivisionDuration := tickDuration / time.Duration(h.subdivision)
-		noteDuration := time.Duration(float64(subdivisionDuration) * 0.75)
+		var tickEvents []events.TickEvent
 
 		// Create an event for each subdivision
 		for i := 0; i < h.subdivision; i++ {
-			eventTime := nextTickTime.Add(subdivisionDuration * time.Duration(i))
+			// Calculate offset as percentage of tick
+			offsetPercent := float64(i) / float64(h.subdivision)
 
-			scheduledEvents = append(scheduledEvents, events.ScheduledEvent{
+			// Duration for each note (75% of subdivision duration)
+			durationTicks := 0.75 / float64(h.subdivision)
+
+			tickEvents = append(tickEvents, events.TickEvent{
 				Event: events.Event{
 					Name: h.name,
 					Type: events.EventTypeNote,
@@ -94,14 +111,13 @@ func (h *SimpleHihatPattern) GetScheduledEventsForTick(nextTickTime time.Time, t
 						"amp":       float32(h.velocity),
 					},
 				},
-				Timing: events.Timing{
-					Timestamp: eventTime,
-					Duration:  noteDuration,
-				},
+				Tick:          tick,
+				OffsetPercent: offsetPercent,
+				DurationTicks: durationTicks,
 			})
 		}
 
-		return scheduledEvents
+		return tickEvents
 	}
 
 	// Outside range - return no events
