@@ -101,8 +101,10 @@ func (f *FMPattern) GetEventsForTick(tick int64) []events.TickEvent {
 				"max_voices": 2,
 			},
 		},
-		Tick:          tick,
-		OffsetPercent: 0.0,
-		DurationTicks: durationTicks,
+		TickTiming: events.TickTiming{
+			Tick:          tick,
+			OffsetPercent: 0.0,
+			DurationTicks: durationTicks,
+		},
 	}}
 }

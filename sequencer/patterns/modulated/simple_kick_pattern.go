@@ -111,9 +111,11 @@ func (k *SimpleKickPattern) GetEventsForTick(tick int64) []events.TickEvent {
 						"amp":       float32(k.velocity),
 					},
 				},
-				Tick:          tick,
+				TickTiming: events.TickTiming{
+					Tick:          tick,
 				OffsetPercent: offsetPercent,
 				DurationTicks: durationTicks,
+				},
 			})
 		}
 

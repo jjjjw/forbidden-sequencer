@@ -102,9 +102,11 @@ func (g *GatedPattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"amp":       float32(g.velocity),
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0,
-			DurationTicks: 0.75,
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0,
+				DurationTicks: 0.75,
+			},
 		}}
 	}
 

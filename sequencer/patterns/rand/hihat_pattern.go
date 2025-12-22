@@ -15,13 +15,14 @@ import (
 //   - playing → silent: 0.7 (70% go silent)
 //   - silent → silent: 0.5 (50% stay silent)
 //   - silent → playing: 0.5 (50% start playing)
+//
 // Uses MIDI note 42 (closed hihat)
 // Silences after snare fires in the phrase
 type HihatPattern struct {
 	conductor    *conductors.Conductor
-	snarePattern *SnarePattern    // reference to snare pattern for trigger state
-	name         string           // event name
-	velocity     float64          // event velocity
+	snarePattern *SnarePattern // reference to snare pattern for trigger state
+	name         string        // event name
+	velocity     float64       // event velocity
 	paused       bool
 	chain        *lib.MarkovChain // Markov chain for play/silent decisions
 }
@@ -107,9 +108,11 @@ func (h *HihatPattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"amp": float32(h.velocity),
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0,
-			DurationTicks: 0.75,
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0,
+				DurationTicks: 0.75,
+			},
 		}}
 	}
 

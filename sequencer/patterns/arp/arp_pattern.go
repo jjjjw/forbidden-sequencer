@@ -120,9 +120,11 @@ func (a *ArpPattern) GetEventsForTick(tick int64) []events.TickEvent {
 				Type:   events.EventTypeRest,
 				Params: map[string]float32{},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0,
-			DurationTicks: 1.0,
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0,
+				DurationTicks: 1.0,
+			},
 		}}
 	}
 
@@ -147,8 +149,10 @@ func (a *ArpPattern) GetEventsForTick(tick int64) []events.TickEvent {
 				"amp":       float32(a.velocity),
 			},
 		},
-		Tick:          tick,
-		OffsetPercent: 0.0,
-		DurationTicks: 0.9, // 90% of tick
+		TickTiming: events.TickTiming{
+			Tick:          tick,
+			OffsetPercent: 0.0,
+			DurationTicks: 0.9,
+		}, // 90% of tick
 	}}
 }

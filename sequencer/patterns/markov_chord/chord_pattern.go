@@ -1,7 +1,6 @@
 package markov_chord
 
 import (
-
 	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
@@ -170,9 +169,11 @@ func (c *ChordPattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"max_voices": 4,
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0,                    // On the beat
-			DurationTicks: float64(c.phraseLength), // Full phrase duration
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0,                     // On the beat
+				DurationTicks: float64(c.phraseLength), // Full phrase duration
+			},
 		})
 	}
 

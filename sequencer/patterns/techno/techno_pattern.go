@@ -79,9 +79,11 @@ func (t *TechnoPattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"amp":       0.8,
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0, // On the beat
-			DurationTicks: 0.1, // Short kick
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0, // On the beat
+				DurationTicks: 0.1, // Short kick
+			},
 		},
 		{
 			// Hihat on the offbeat (halfway through beat)
@@ -93,9 +95,11 @@ func (t *TechnoPattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"amp":       0.6,
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: float64(t.ticksPerBeat) / 2.0, // Halfway to next beat
-			DurationTicks: 0.05,                          // Shorter hihat
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: float64(t.ticksPerBeat) / 2.0, // Halfway to next beat
+				DurationTicks: 0.05,                          // Shorter hihat
+			},
 		},
 	}
 }

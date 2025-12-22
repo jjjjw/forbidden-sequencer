@@ -33,9 +33,11 @@ func (s *SimpleKickPattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"amp":  0.8,
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0,  // On the beat
-			DurationTicks: 0.75, // 75% of tick duration
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0,  // On the beat
+				DurationTicks: 0.75, // 75% of tick duration
+			},
 		}}
 	}
 

@@ -21,13 +21,14 @@ type Pattern interface {
 
 // Sequencer manages multiple patterns and outputs events through an adapter
 type Sequencer struct {
-	patterns       []Pattern
-	adapter        adapters.EventAdapter
-	conductor      *conductors.Conductor
-	eventsChan     chan<- events.ScheduledEvent
-	lookaheadTicks int64 // how many ticks ahead to schedule events
-	debug          bool
-	debugLog       *log.Logger
+	patterns          []Pattern
+	adapter           adapters.EventAdapter
+	conductor         *conductors.Conductor
+	eventsChan        chan<- events.ScheduledEvent
+	lookaheadTicks    int64     // how many ticks ahead to schedule events
+	lastScheduledTime time.Time // latest wall-clock time we've scheduled an event for (prevents overlapping on tempo change)
+	debug             bool
+	debugLog          *log.Logger
 }
 
 // NewSequencer creates a new sequencer with the given patterns, conductor, and adapter
@@ -43,13 +44,14 @@ func NewSequencer(patterns []Pattern, conductor *conductors.Conductor, adapter a
 	}
 
 	return &Sequencer{
-		patterns:       patterns,
-		conductor:      conductor,
-		adapter:        adapter,
-		eventsChan:     eventsChan,
-		lookaheadTicks: 10, // always schedule 10 ticks ahead
-		debug:          debug,
-		debugLog:       debugLogger,
+		patterns:          patterns,
+		conductor:         conductor,
+		adapter:           adapter,
+		eventsChan:        eventsChan,
+		lookaheadTicks:    10,            // always schedule 10 ticks ahead
+		lastScheduledTime: time.Time{},   // zero time (before any real timestamp)
+		debug:             debug,
+		debugLog:          debugLogger,
 	}
 }
 
@@ -75,9 +77,27 @@ func (s *Sequencer) handleTick(currentTick int64) {
 	tickDuration := s.conductor.GetTickDuration()
 	lastTickTime := s.conductor.GetLastTickTime()
 
-	if s.debugLog != nil {
-		s.debugLog.Printf("Tick %d: generating events for tick %d (lookahead=%d)", currentTick, targetTick, s.lookaheadTicks)
+	// Calculate what time this target tick would be scheduled at
+	ticksInFuture := targetTick - currentTick
+	targetTickTime := lastTickTime.Add(time.Duration(ticksInFuture) * tickDuration)
+
+	// Only generate events if we haven't already scheduled past this wall-clock time
+	// This prevents overlapping events when tick duration changes
+	if !s.lastScheduledTime.IsZero() && !targetTickTime.After(s.lastScheduledTime) {
+		if s.debugLog != nil {
+			s.debugLog.Printf("Tick %d: skipping tick %d at %v (already scheduled up to %v)",
+				currentTick, targetTick, targetTickTime.Format("15:04:05.000"), s.lastScheduledTime.Format("15:04:05.000"))
+		}
+		return
 	}
+
+	if s.debugLog != nil {
+		s.debugLog.Printf("Tick %d: generating events for tick %d at %v (lookahead=%d)",
+			currentTick, targetTick, targetTickTime.Format("15:04:05.000"), s.lookaheadTicks)
+	}
+
+	// Track the latest timestamp we schedule in this tick
+	var latestTimestamp time.Time
 
 	// Generate events for the target tick from all patterns
 	for i, pattern := range s.patterns {
@@ -91,12 +111,21 @@ func (s *Sequencer) handleTick(currentTick int64) {
 		for _, tickEvent := range tickEvents {
 			// Calculate absolute timestamp from tick-relative information
 			// How many ticks in the future is this event from the conductor's current position?
-			ticksInFuture := tickEvent.Tick - currentTick
+			ticksInFuture := tickEvent.TickTiming.Tick - currentTick
 			timeOfEventTick := lastTickTime.Add(time.Duration(ticksInFuture) * tickDuration)
-			timestamp := timeOfEventTick.Add(time.Duration(float64(tickDuration) * tickEvent.OffsetPercent))
+			timestamp := timeOfEventTick.Add(time.Duration(float64(tickDuration) * tickEvent.TickTiming.OffsetPercent))
+
+			// Skip events that would be scheduled before our last scheduled time
+			if !s.lastScheduledTime.IsZero() && !timestamp.After(s.lastScheduledTime) {
+				if s.debugLog != nil {
+					s.debugLog.Printf("Skipping event at %v (before lastScheduledTime %v)",
+						timestamp.Format("15:04:05.000"), s.lastScheduledTime.Format("15:04:05.000"))
+				}
+				continue
+			}
 
 			// Convert duration from ticks to wall-clock time
-			duration := time.Duration(float64(tickDuration) * tickEvent.DurationTicks)
+			duration := time.Duration(float64(tickDuration) * tickEvent.TickTiming.DurationTicks)
 
 			scheduled := events.ScheduledEvent{
 				Event: tickEvent.Event,
@@ -108,11 +137,24 @@ func (s *Sequencer) handleTick(currentTick int64) {
 
 			if s.debugLog != nil {
 				s.debugLog.Printf("Scheduling event: name=%s tick=%d timestamp=%v duration=%v",
-					tickEvent.Event.Name, tickEvent.Tick, timestamp.Format("15:04:05.000"), duration)
+					tickEvent.Event.Name, tickEvent.TickTiming.Tick, timestamp.Format("15:04:05.000"), duration)
 			}
 
 			s.sendEvent(scheduled)
+
+			// Track the latest timestamp
+			if latestTimestamp.IsZero() || timestamp.After(latestTimestamp) {
+				latestTimestamp = timestamp
+			}
 		}
+	}
+
+	// Update last scheduled time to the latest timestamp we actually scheduled
+	// (or the target tick time if we scheduled nothing)
+	if !latestTimestamp.IsZero() {
+		s.lastScheduledTime = latestTimestamp
+	} else if s.lastScheduledTime.IsZero() || targetTickTime.After(s.lastScheduledTime) {
+		s.lastScheduledTime = targetTickTime
 	}
 }
 
@@ -169,6 +211,9 @@ func (s *Sequencer) SetPatterns(patterns []Pattern) {
 
 	// Reset conductor to start from tick 0
 	s.conductor.Reset()
+
+	// Reset scheduling state
+	s.lastScheduledTime = time.Time{}
 
 	if s.debugLog != nil {
 		s.debugLog.Printf("SetPatterns: loaded %d new patterns", len(patterns))

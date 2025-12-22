@@ -15,12 +15,12 @@ type SnarePattern struct {
 	name           string
 	velocity       float64
 	paused         bool
-	phraseLength   int             // length of phrase in ticks
-	tickInPhrase   int             // current tick within phrase
-	lastTick       int64           // last tick we saw
+	phraseLength   int              // length of phrase in ticks
+	tickInPhrase   int              // current tick within phrase
+	lastTick       int64            // last tick we saw
 	chain          *lib.MarkovChain // Markov chain for trigger decisions
-	willTrigger    bool            // whether snare will trigger this phrase
-	triggerChecked bool            // whether we've decided for this phrase
+	willTrigger    bool             // whether snare will trigger this phrase
+	triggerChecked bool             // whether we've decided for this phrase
 }
 
 // NewSnarePattern creates a new snare pattern
@@ -135,9 +135,11 @@ func (s *SnarePattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"amp": float32(s.velocity),
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0,
-			DurationTicks: 0.75,
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0,
+				DurationTicks: 0.75,
+			},
 		}}
 	}
 

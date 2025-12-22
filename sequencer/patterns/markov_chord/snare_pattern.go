@@ -94,9 +94,11 @@ func (s *SnarePattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"amp": float32(s.velocity),
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0,
-			DurationTicks: 0.75,
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0,
+				DurationTicks: 0.75,
+			},
 		}}
 	}
 

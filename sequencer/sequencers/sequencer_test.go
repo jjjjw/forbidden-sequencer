@@ -50,9 +50,11 @@ func (m *mockPattern) GetEventsForTick(tick int64) []events.TickEvent {
 				"amp":       0.5,
 			},
 		},
-		Tick:          tick,
-		OffsetPercent: 0.0,
-		DurationTicks: 0.5,
+		TickTiming: events.TickTiming{
+			Tick:          tick,
+			OffsetPercent: 0.0,
+			DurationTicks: 0.5,
+		},
 	}}
 }
 

@@ -94,9 +94,11 @@ func (h *HihatPattern) GetEventsForTick(tick int64) []events.TickEvent {
 					"amp": float32(h.velocity),
 				},
 			},
-			Tick:          tick,
-			OffsetPercent: 0.0,
-			DurationTicks: 0.5, // Shorter hihat
+			TickTiming: events.TickTiming{
+				Tick:          tick,
+				OffsetPercent: 0.0,
+				DurationTicks: 0.5,
+			}, // Shorter hihat
 		}}
 	}
 
