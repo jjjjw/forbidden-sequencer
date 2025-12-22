@@ -10,25 +10,23 @@ import (
 	"forbidden_sequencer/sequencer/events"
 )
 
-// mockPattern is a test pattern that fires a fixed number of times
+// mockPattern is a test pattern that fires on every tick up to maxEvents
 type mockPattern struct {
-	conductor  conductors.Conductor
 	eventCount int
 	maxEvents  int
 	paused     bool
 	mu         sync.Mutex
 }
 
-func newMockPattern(conductor conductors.Conductor, maxEvents int) *mockPattern {
+func newMockPattern(maxEvents int) *mockPattern {
 	return &mockPattern{
-		conductor:  conductor,
 		eventCount: 0,
 		maxEvents:  maxEvents,
 		paused:     true,
 	}
 }
 
-func (m *mockPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDuration time.Duration) []events.ScheduledEvent {
+func (m *mockPattern) GetEventsForTick(tick int64) []events.TickEvent {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -43,7 +41,7 @@ func (m *mockPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDura
 	}
 
 	m.eventCount++
-	return []events.ScheduledEvent{{
+	return []events.TickEvent{{
 		Event: events.Event{
 			Name: fmt.Sprintf("event_%d", m.eventCount),
 			Type: events.EventTypeNote,
@@ -52,10 +50,9 @@ func (m *mockPattern) GetScheduledEventsForTick(nextTickTime time.Time, tickDura
 				"amp":       0.5,
 			},
 		},
-		Timing: events.Timing{
-			Timestamp: nextTickTime,
-			Duration:  50 * time.Millisecond,
-		},
+		Tick:          tick,
+		OffsetPercent: 0.0,
+		DurationTicks: 0.5,
 	}}
 }
 
@@ -127,12 +124,12 @@ func (m *mockAdapter) getEvents() []events.ScheduledEvent {
 }
 
 func TestSequencer_NewSequencer(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(120, 4)
+	conductor := conductors.NewConductor(100 * time.Millisecond)
 	adapter := newMockAdapter()
-	pattern := newMockPattern(conductor, 5)
+	pattern := newMockPattern(5)
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 
 	if seq == nil {
 		t.Fatal("Expected non-nil sequencer")
@@ -144,18 +141,17 @@ func TestSequencer_NewSequencer(t *testing.T) {
 }
 
 func TestSequencer_StartAndPatternExecution(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(120, 4)
+	conductor := conductors.NewConductor(100 * time.Millisecond)
 	adapter := newMockAdapter()
-	pattern := newMockPattern(conductor, 3) // Generate 3 events
+	pattern := newMockPattern(3) // Generate 3 events
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 	seq.Start()
 	seq.Play() // Start playback
 
-	// Wait for pattern to generate events
-	// At 120 BPM with 4 ticks/beat: tick duration = 125ms
-	time.Sleep(300 * time.Millisecond)
+	// Wait for pattern to generate events (100ms tick duration)
+	time.Sleep(1200 * time.Millisecond) // Wait for ~12 ticks (lookahead is 10)
 
 	// Check that pattern generated events
 	if pattern.getEventCount() < 1 {
@@ -177,24 +173,24 @@ func TestSequencer_StartAndPatternExecution(t *testing.T) {
 }
 
 func TestSequencer_StopAndPlay(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(120, 4)
+	conductor := conductors.NewConductor(100 * time.Millisecond)
 	adapter := newMockAdapter()
-	pattern := newMockPattern(conductor, 100) // Lots of events
+	pattern := newMockPattern(100) // Lots of events
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 	seq.Start()
 	seq.Play() // Start playing
 
-	// Let it run - need to wait for at least one tick (125ms at 120 BPM, 4 ticks/beat)
-	time.Sleep(300 * time.Millisecond)
+	// Let it run (100ms tick duration)
+	time.Sleep(1200 * time.Millisecond)
 
 	adapterCount1 := adapter.getEventCount()
 	if adapterCount1 < 1 {
 		t.Error("Expected adapter to receive events while playing")
 	}
 
-	// Stop (patterns stop processing and reset)
+	// Stop (patterns stop processing)
 	seq.Stop()
 
 	// Small sleep to let any in-flight events complete
@@ -202,18 +198,17 @@ func TestSequencer_StopAndPlay(t *testing.T) {
 	adapterCount2 := adapter.getEventCount()
 
 	// Wait longer and verify no more events come through
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 	adapterCount3 := adapter.getEventCount()
 
-	// Adapter should not receive many new events while stopped
-	// Allow for up to 2 in-flight events due to scheduling race
-	if adapterCount3 > adapterCount2+2 {
-		t.Errorf("Expected minimal new events while stopped, got %d after waiting vs %d right after stop", adapterCount3, adapterCount2)
+	// Adapter should not receive new events while stopped
+	if adapterCount3 != adapterCount2 {
+		t.Errorf("Expected no new events while stopped, got %d after waiting vs %d right after stop", adapterCount3, adapterCount2)
 	}
 
-	// Play again (resets conductor and patterns start fresh)
+	// Play again
 	seq.Play()
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 
 	adapterCount4 := adapter.getEventCount()
 	// Adapter should receive new events after play
@@ -223,18 +218,18 @@ func TestSequencer_StopAndPlay(t *testing.T) {
 }
 
 func TestSequencer_MultiplePatterns(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(120, 4)
+	conductor := conductors.NewConductor(100 * time.Millisecond)
 	adapter := newMockAdapter()
-	pattern1 := newMockPattern(conductor, 2)
-	pattern2 := newMockPattern(conductor, 2)
+	pattern1 := newMockPattern(2)
+	pattern2 := newMockPattern(2)
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern1, pattern2}, conductor, adapter, eventChan)
+	seq := NewSequencer([]Pattern{pattern1, pattern2}, conductor, adapter, eventChan, false)
 	seq.Start()
 	seq.Play() // Start playback
 
-	// Wait for patterns to generate events - need multiple ticks
-	time.Sleep(300 * time.Millisecond)
+	// Wait for patterns to generate events
+	time.Sleep(1200 * time.Millisecond)
 
 	// Both patterns should have generated events
 	if pattern1.getEventCount() < 1 {
@@ -253,17 +248,17 @@ func TestSequencer_MultiplePatterns(t *testing.T) {
 }
 
 func TestSequencer_ConductorIntegration(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(120, 4)
+	conductor := conductors.NewConductor(100 * time.Millisecond)
 	adapter := newMockAdapter()
-	pattern := newMockPattern(conductor, 5)
+	pattern := newMockPattern(5)
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 	seq.Start()
 	seq.Play()
 
-	// Wait for at least 2 tick durations (250ms)
-	time.Sleep(300 * time.Millisecond)
+	// Wait for ticks
+	time.Sleep(1200 * time.Millisecond)
 
 	// Check that pattern generated events (indicates conductor is running)
 	if pattern.getEventCount() < 1 {
@@ -278,7 +273,7 @@ func TestSequencer_ConductorIntegration(t *testing.T) {
 	seq.Play()
 
 	// Give it a moment to run
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 
 	// Pattern should have generated more events after reset+play
 	if adapter.getEventCount() < 2 {
@@ -287,17 +282,17 @@ func TestSequencer_ConductorIntegration(t *testing.T) {
 }
 
 func TestSequencer_PlayStopPlayCycle(t *testing.T) {
-	conductor := conductors.NewCommonTimeConductor(120, 4)
+	conductor := conductors.NewConductor(100 * time.Millisecond)
 	adapter := newMockAdapter()
-	pattern := newMockPattern(conductor, 100)
+	pattern := newMockPattern(100)
 	eventChan := make(chan events.ScheduledEvent, 100)
 
-	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan)
+	seq := NewSequencer([]Pattern{pattern}, conductor, adapter, eventChan, false)
 	seq.Start()
 
 	// First play cycle
 	seq.Play()
-	time.Sleep(400 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 
 	count1 := adapter.getEventCount()
 	if count1 < 1 {
@@ -315,7 +310,7 @@ func TestSequencer_PlayStopPlayCycle(t *testing.T) {
 	seq.Play()
 
 	// Let it run and verify events are generated
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(1200 * time.Millisecond)
 	count3 := adapter.getEventCount()
 
 	if count3 <= count2 {

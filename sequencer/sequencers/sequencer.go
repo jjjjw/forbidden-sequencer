@@ -21,25 +21,17 @@ type Pattern interface {
 
 // Sequencer manages multiple patterns and outputs events through an adapter
 type Sequencer struct {
-	patterns      []Pattern
-	adapter       adapters.EventAdapter
-	conductor     *conductors.Conductor
-	eventsChan    chan<- events.ScheduledEvent
-	lookaheadMs   int   // lookahead window in milliseconds
-	currentTick   int64 // current logical tick
-	eventBuffers  map[int]map[int64][]events.TickEvent // pattern index -> tick -> events
-	debug         bool
-	debugLog      *log.Logger
+	patterns       []Pattern
+	adapter        adapters.EventAdapter
+	conductor      *conductors.Conductor
+	eventsChan     chan<- events.ScheduledEvent
+	lookaheadTicks int64 // how many ticks ahead to schedule events
+	debug          bool
+	debugLog       *log.Logger
 }
 
 // NewSequencer creates a new sequencer with the given patterns, conductor, and adapter
 func NewSequencer(patterns []Pattern, conductor *conductors.Conductor, adapter adapters.EventAdapter, eventsChan chan<- events.ScheduledEvent, debug bool) *Sequencer {
-	// Initialize event buffers for each pattern
-	eventBuffers := make(map[int]map[int64][]events.TickEvent)
-	for i := range patterns {
-		eventBuffers[i] = make(map[int64][]events.TickEvent)
-	}
-
 	// Set up debug logging if enabled
 	var debugLogger *log.Logger
 	if debug {
@@ -51,125 +43,82 @@ func NewSequencer(patterns []Pattern, conductor *conductors.Conductor, adapter a
 	}
 
 	return &Sequencer{
-		patterns:     patterns,
-		conductor:    conductor,
-		adapter:      adapter,
-		eventsChan:   eventsChan,
-		lookaheadMs:  25, // 25ms default lookahead
-		currentTick:  0,
-		eventBuffers: eventBuffers,
-		debug:        debug,
-		debugLog:     debugLogger,
+		patterns:       patterns,
+		conductor:      conductor,
+		adapter:        adapter,
+		eventsChan:     eventsChan,
+		lookaheadTicks: 10, // always schedule 10 ticks ahead
+		debug:          debug,
+		debugLog:       debugLogger,
 	}
 }
 
 // Start initializes and starts the sequencer
 func (s *Sequencer) Start() {
-	// Start conductor
+	// Register tick callback with conductor
+	s.conductor.SetTickCallback(s.handleTick)
+
+	// Start conductor (which will trigger handleTick on every tick)
 	s.conductor.Start()
 
-	// Start tick-driven event loop
-	go s.runTickLoop()
+	if s.debugLog != nil {
+		s.debugLog.Printf("Sequencer started with lookaheadTicks=%d", s.lookaheadTicks)
+	}
 }
 
-// runTickLoop periodically generates events to maintain lookahead window
-func (s *Sequencer) runTickLoop() {
-	ticker := time.NewTicker(time.Duration(s.lookaheadMs) * time.Millisecond)
-	defer ticker.Stop()
+// handleTick is called by the conductor on every tick
+// At tick N, we generate events for tick N + lookaheadTicks
+func (s *Sequencer) handleTick(currentTick int64) {
+	// Calculate which tick to generate events for
+	targetTick := currentTick + s.lookaheadTicks
+
+	tickDuration := s.conductor.GetTickDuration()
+	lastTickTime := s.conductor.GetLastTickTime()
 
 	if s.debugLog != nil {
-		s.debugLog.Printf("Sequencer runTickLoop started, lookaheadMs=%d", s.lookaheadMs)
+		s.debugLog.Printf("Tick %d: generating events for tick %d (lookahead=%d)", currentTick, targetTick, s.lookaheadTicks)
 	}
 
-	for range ticker.C {
-		now := time.Now()
-		lastTickTime := s.conductor.GetLastTickTime()
-		tickDuration := s.conductor.GetTickDuration()
+	// Generate events for the target tick from all patterns
+	for i, pattern := range s.patterns {
+		tickEvents := pattern.GetEventsForTick(targetTick)
 
-		// Calculate lookahead range in ticks (minimum 1 tick)
-		lookaheadDuration := time.Duration(s.lookaheadMs) * time.Millisecond
-		lookaheadTicks := int64(lookaheadDuration / tickDuration)
-		if lookaheadTicks < 1 {
-			lookaheadTicks = 1
+		if s.debugLog != nil && len(tickEvents) > 0 {
+			s.debugLog.Printf("Pattern %d generated %d events for tick %d", i, len(tickEvents), targetTick)
 		}
 
-		// Determine current tick based on time elapsed since last conductor tick
-		timeSinceLastTick := now.Sub(lastTickTime)
-		ticksElapsed := int64(timeSinceLastTick / tickDuration)
-		s.currentTick = s.currentTick + ticksElapsed
+		// Schedule each event
+		for _, tickEvent := range tickEvents {
+			// Calculate absolute timestamp from tick-relative information
+			// How many ticks in the future is this event from the conductor's current position?
+			ticksInFuture := tickEvent.Tick - currentTick
+			timeOfEventTick := lastTickTime.Add(time.Duration(ticksInFuture) * tickDuration)
+			timestamp := timeOfEventTick.Add(time.Duration(float64(tickDuration) * tickEvent.OffsetPercent))
 
-		// Calculate the tick we need to have events scheduled through
-		targetTick := s.currentTick + lookaheadTicks
+			// Convert duration from ticks to wall-clock time
+			duration := time.Duration(float64(tickDuration) * tickEvent.DurationTicks)
 
-		if s.debugLog != nil {
-			s.debugLog.Printf("Lookahead cycle: now=%v lastTickTime=%v tickDuration=%v currentTick=%d targetTick=%d lookaheadTicks=%d",
-				now.Format("15:04:05.000"), lastTickTime.Format("15:04:05.000"), tickDuration, s.currentTick, targetTick, lookaheadTicks)
-		}
-
-		// Generate and schedule events for ticks in lookahead window
-		for i, pattern := range s.patterns {
-			buffer := s.eventBuffers[i]
-
-			// Find the highest tick we've already generated
-			maxGenerated := s.currentTick - 1
-			for tick := range buffer {
-				if tick > maxGenerated {
-					maxGenerated = tick
-				}
+			scheduled := events.ScheduledEvent{
+				Event: tickEvent.Event,
+				Timing: events.Timing{
+					Timestamp: timestamp,
+					Duration:  duration,
+				},
 			}
 
-			// Generate events from after the last generated tick up to target
-			for tick := maxGenerated + 1; tick <= targetTick; tick++ {
-				// Request events for this tick from pattern
-				tickEvents := pattern.GetEventsForTick(tick)
-
-				if s.debugLog != nil && len(tickEvents) > 0 {
-					s.debugLog.Printf("Pattern %d generated %d events for tick %d", i, len(tickEvents), tick)
-				}
-
-				// Schedule these events immediately (adapter handles timing)
-				for _, tickEvent := range tickEvents {
-					// Calculate absolute timestamp from tick-relative information
-					ticksFromLastTick := tickEvent.Tick - (s.currentTick - ticksElapsed)
-					timeOfEventTick := lastTickTime.Add(time.Duration(ticksFromLastTick) * tickDuration)
-					timestamp := timeOfEventTick.Add(time.Duration(float64(tickDuration) * tickEvent.OffsetPercent))
-
-					// Convert duration from ticks to wall-clock time
-					duration := time.Duration(float64(tickDuration) * tickEvent.DurationTicks)
-
-					scheduled := events.ScheduledEvent{
-						Event: tickEvent.Event,
-						Timing: events.Timing{
-							Timestamp: timestamp,
-							Duration:  duration,
-						},
-					}
-
-					if s.debugLog != nil {
-						s.debugLog.Printf("Scheduling event: name=%s tick=%d timestamp=%v duration=%v",
-							tickEvent.Event.Name, tickEvent.Tick, timestamp.Format("15:04:05.000"), duration)
-					}
-
-					s.handleEvent(scheduled)
-				}
-
-				// Mark this tick as processed (prevent regenerating)
-				buffer[tick] = tickEvents
+			if s.debugLog != nil {
+				s.debugLog.Printf("Scheduling event: name=%s tick=%d timestamp=%v duration=%v",
+					tickEvent.Event.Name, tickEvent.Tick, timestamp.Format("15:04:05.000"), duration)
 			}
 
-			// Clean up old buffer entries (before current tick)
-			for tick := range buffer {
-				if tick < s.currentTick {
-					delete(buffer, tick)
-				}
-			}
+			s.sendEvent(scheduled)
 		}
 	}
 }
 
-// handleEvent sends an event to the adapter and TUI
+// sendEvent sends an event to the adapter and TUI
 // Adapters are responsible for scheduling (e.g., OSC bundles with timestamps)
-func (s *Sequencer) handleEvent(scheduled events.ScheduledEvent) {
+func (s *Sequencer) sendEvent(scheduled events.ScheduledEvent) {
 	// Send to adapter (adapter handles timing/scheduling)
 	if s.adapter != nil {
 		if err := s.adapter.Send(scheduled); err != nil {
@@ -218,14 +167,8 @@ func (s *Sequencer) SetPatterns(patterns []Pattern) {
 	// Replace patterns
 	s.patterns = patterns
 
-	// Reset currentTick to start from beginning
-	s.currentTick = 0
-
-	// Clear and reinitialize event buffers
-	s.eventBuffers = make(map[int]map[int64][]events.TickEvent)
-	for i := range patterns {
-		s.eventBuffers[i] = make(map[int64][]events.TickEvent)
-	}
+	// Reset conductor to start from tick 0
+	s.conductor.Reset()
 
 	if s.debugLog != nil {
 		s.debugLog.Printf("SetPatterns: loaded %d new patterns", len(patterns))
