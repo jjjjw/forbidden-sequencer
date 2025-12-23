@@ -122,6 +122,25 @@ events.TickEvent{
 }
 ```
 
+**Hihat with anticipation (fires before the tick):**
+```go
+events.TickEvent{
+    Event: events.Event{
+        Name: "hihat",
+        Type: events.EventTypeNote,
+        Params: map[string]float32{
+            "midi_note": 42.0,    // Closed hihat
+            "amp":       0.6,     // 60% amplitude
+        },
+    },
+    TickTiming: events.TickTiming{
+        Tick:          tick,
+        OffsetPercent: -0.1,    // Fires 10% of a tick BEFORE the tick (anticipation)
+        DurationTicks: 0.25,    // Short duration
+    },
+}
+```
+
 **Sequencer converts to `ScheduledEvent` with absolute wall-clock timing:**
 ```go
 events.ScheduledEvent{
@@ -135,6 +154,7 @@ events.ScheduledEvent{
 
 **Note:**
 - Patterns work in tick-relative time (ticks + offsets)
+- `OffsetPercent` range: -0.99 to 0.99 (negative = before tick, positive = after tick)
 - Sequencer converts to wall-clock time for adapters
 - Adapters handle protocol-specific conversions (midi_note ↔ freq)
 

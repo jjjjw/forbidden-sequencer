@@ -3,6 +3,7 @@ package sequencers
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"time"
 
@@ -25,10 +26,23 @@ type Sequencer struct {
 	adapter           adapters.EventAdapter
 	conductor         *conductors.Conductor
 	eventsChan        chan<- events.ScheduledEvent
-	lookaheadTicks    int64     // how many ticks ahead to schedule events
 	lastScheduledTime time.Time // latest wall-clock time we've scheduled an event for (prevents overlapping on tempo change)
 	debug             bool
 	debugLog          *log.Logger
+}
+
+// calculateLookaheadTicks determines how many ticks ahead to schedule events
+// Minimum: 2 ticks
+// Target: At least 500ms of lookahead time
+func calculateLookaheadTicks(tickDuration time.Duration) int64 {
+	const minTicks = 2
+	const targetMs = 500 * time.Millisecond
+
+	ticks := int64(math.Ceil(float64(targetMs) / float64(tickDuration)))
+	if ticks < minTicks {
+		return minTicks
+	}
+	return ticks
 }
 
 // NewSequencer creates a new sequencer with the given patterns, conductor, and adapter
@@ -48,8 +62,7 @@ func NewSequencer(patterns []Pattern, conductor *conductors.Conductor, adapter a
 		conductor:         conductor,
 		adapter:           adapter,
 		eventsChan:        eventsChan,
-		lookaheadTicks:    10,            // always schedule 10 ticks ahead
-		lastScheduledTime: time.Time{},   // zero time (before any real timestamp)
+		lastScheduledTime: time.Time{}, // zero time (before any real timestamp)
 		debug:             debug,
 		debugLog:          debugLogger,
 	}
@@ -64,18 +77,24 @@ func (s *Sequencer) Start() {
 	s.conductor.Start()
 
 	if s.debugLog != nil {
-		s.debugLog.Printf("Sequencer started with lookaheadTicks=%d", s.lookaheadTicks)
+		tickDuration := s.conductor.GetTickDuration()
+		lookaheadTicks := calculateLookaheadTicks(tickDuration)
+		lookaheadMs := time.Duration(lookaheadTicks) * tickDuration
+		s.debugLog.Printf("Sequencer started with lookaheadTicks=%d (%v)", lookaheadTicks, lookaheadMs)
 	}
 }
 
 // handleTick is called by the conductor on every tick
 // At tick N, we generate events for tick N + lookaheadTicks
 func (s *Sequencer) handleTick(currentTick int64) {
-	// Calculate which tick to generate events for
-	targetTick := currentTick + s.lookaheadTicks
-
 	tickDuration := s.conductor.GetTickDuration()
 	lastTickTime := s.conductor.GetLastTickTime()
+
+	// Calculate lookahead based on current tick duration
+	lookaheadTicks := calculateLookaheadTicks(tickDuration)
+
+	// Calculate which tick to generate events for
+	targetTick := currentTick + lookaheadTicks
 
 	// Calculate what time this target tick would be scheduled at
 	ticksInFuture := targetTick - currentTick
@@ -93,7 +112,7 @@ func (s *Sequencer) handleTick(currentTick int64) {
 
 	if s.debugLog != nil {
 		s.debugLog.Printf("Tick %d: generating events for tick %d at %v (lookahead=%d)",
-			currentTick, targetTick, targetTickTime.Format("15:04:05.000"), s.lookaheadTicks)
+			currentTick, targetTick, targetTickTime.Format("15:04:05.000"), lookaheadTicks)
 	}
 
 	// Track the latest timestamp we schedule in this tick

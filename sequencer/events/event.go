@@ -51,7 +51,7 @@ type ScheduledEvent struct {
 // TickTiming represents when and how long an event should play in logical tick time
 type TickTiming struct {
 	Tick          int64   // which tick this event fires on
-	OffsetPercent float64 // offset from tick start (0.0 = on tick, 0.5 = halfway to next tick)
+	OffsetPercent float64 // offset from tick start as percentage of tick duration (range: -0.99 to 0.99, where 0.0 = on tick, 0.5 = halfway to next tick, -0.5 = halfway before tick)
 	DurationTicks float64 // duration in ticks (can be fractional, e.g., 0.75 for 75% of a tick)
 }
 
