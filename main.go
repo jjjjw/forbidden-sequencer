@@ -4,13 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	"forbidden_sequencer/sequencer/adapters"
-	"forbidden_sequencer/sequencer/conductors"
-	seqlib "forbidden_sequencer/sequencer/sequencers"
 	"forbidden_sequencer/tui"
-	"forbidden_sequencer/tui/sequencers"
+	"forbidden_sequencer/tui/controllers"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -27,8 +24,8 @@ func initialModel() tui.Model {
 		}
 	}
 
-	// Initialize SuperCollider adapter
-	scAdapter, err := adapters.SetupSuperColliderAdapter(*debug)
+	// Initialize sclang OSC adapter (for pattern control)
+	sclangAdapter, err := adapters.SetupSClangAdapter()
 	if err != nil {
 		return tui.Model{
 			Settings: settings,
@@ -37,50 +34,15 @@ func initialModel() tui.Model {
 		}
 	}
 
-	// Create global conductor with default tick duration (100ms)
-	conductor := conductors.NewConductor(100 * time.Millisecond)
-
-	// Create global sequencer (with empty patterns initially)
-	sequencer := seqlib.NewSequencer(nil, conductor, scAdapter, nil, *debug)
-
-	// Start the sequencer (this starts the runTickLoop)
-	sequencer.Start()
-
 	m := tui.Model{
-		Settings:  settings,
-		Screen:    tui.ScreenMain,
-		SCAdapter: scAdapter,
-		Debug:     *debug,
-		Conductor: conductor,
-		Sequencer: sequencer,
+		Settings:      settings,
+		Screen:        tui.ScreenMain,
+		SClangAdapter: sclangAdapter,
+		Debug:         *debug,
 	}
 
-	// Create module factories
-	m.ModuleFactories = []sequencers.ModuleFactory{
-		&sequencers.ModulatedRhythmFactory{},
-		&sequencers.RandRhythmFactory{},
-		&sequencers.ArpFactory{},
-		&sequencers.TechnoFactory{},
-		&sequencers.MarkovChordFactory{},
-	}
-
-	// Find and activate the saved module
-	m.ActiveModuleIndex = 0
-	for i, factory := range m.ModuleFactories {
-		if factory.GetName() == settings.SelectedSequencer {
-			m.ActiveModuleIndex = i
-			break
-		}
-	}
-
-	// Create and initialize active module (starts paused)
-	if m.ActiveModuleIndex < len(m.ModuleFactories) {
-		factory := m.ModuleFactories[m.ActiveModuleIndex]
-		m.ActiveModule = factory.Create(conductor)
-
-		// Load the module's patterns into the global sequencer
-		sequencer.SetPatterns(m.ActiveModule.GetPatterns())
-	}
+	// Create controller for modulated rhythm pattern
+	m.ActiveController = controllers.NewModulatedRhythmController(sclangAdapter)
 
 	return m
 }
