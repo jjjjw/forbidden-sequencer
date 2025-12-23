@@ -14,14 +14,12 @@ import (
 func NewRandRhythmModule(conductor *conductors.Conductor, phraseLength int) []sequencers.Pattern {
 	// Create snare pattern first (other patterns reference it for trigger state)
 	snarePattern := randpatterns.NewSnarePattern(
-		conductor,
 		"snare",
 		0.7,          // velocity
 		phraseLength, // phrase length
 	)
 
 	kickPattern := randpatterns.NewKickPattern(
-		conductor,
 		snarePattern, // reference to snare for trigger state
 		"kick",
 		50.0, // frequency in Hz (bass drum)
@@ -29,7 +27,6 @@ func NewRandRhythmModule(conductor *conductors.Conductor, phraseLength int) []se
 	)
 
 	hihatPattern := randpatterns.NewHihatPattern(
-		conductor,
 		snarePattern, // reference to snare for trigger state
 		"hihat",
 		0.6, // velocity

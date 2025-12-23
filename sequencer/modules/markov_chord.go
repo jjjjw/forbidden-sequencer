@@ -19,7 +19,6 @@ func NewMarkovChordModule(
 ) ([]sequencers.Pattern, *markovchord.ChordPattern) {
 	// Create chord pattern (manages section state)
 	chordPattern := markovchord.NewChordPattern(
-		conductor,
 		53,                    // root note (F3)
 		lib.MelodicMinorScale, // melodic minor scale
 		0.6,                   // velocity
@@ -29,7 +28,6 @@ func NewMarkovChordModule(
 
 	// Create percussion patterns (read section state from chord pattern)
 	kickPattern := markovchord.NewKickPattern(
-		conductor,
 		chordPattern,
 		"kick",
 		50.0, // frequency in Hz
@@ -37,14 +35,12 @@ func NewMarkovChordModule(
 	)
 
 	snarePattern := markovchord.NewSnarePattern(
-		conductor,
 		chordPattern,
 		"snare",
 		0.7, // velocity
 	)
 
 	hihatPattern := markovchord.NewHihatPattern(
-		conductor,
 		chordPattern,
 		"hihat",
 		0.6, // velocity

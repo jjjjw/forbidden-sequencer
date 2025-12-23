@@ -3,7 +3,6 @@ package rand
 import (
 	"fmt"
 
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 )
@@ -19,7 +18,6 @@ import (
 // Uses MIDI note 42 (closed hihat)
 // Silences after snare fires in the phrase
 type HihatPattern struct {
-	conductor    *conductors.Conductor
 	snarePattern *SnarePattern // reference to snare pattern for trigger state
 	name         string        // event name
 	velocity     float64       // event velocity
@@ -29,7 +27,6 @@ type HihatPattern struct {
 
 // NewHihatPattern creates a new hihat pattern
 func NewHihatPattern(
-	conductor *conductors.Conductor,
 	snarePattern *SnarePattern,
 	name string,
 	velocity float64,
@@ -47,7 +44,6 @@ func NewHihatPattern(
 	chain.SetTransitionProbability("silent", "playing", 0.5)
 
 	return &HihatPattern{
-		conductor:    conductor,
 		snarePattern: snarePattern,
 		name:         name,
 		velocity:     velocity,

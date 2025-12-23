@@ -16,24 +16,26 @@ func NewModulatedRhythmModule(
 	phraseLength int,
 ) ([]sequencers.Pattern, *modulated.SimpleKickPattern, *modulated.SimpleHihatPattern) {
 	// Create simple patterns based on phrase position:
-	// - Kick: fires every tick in first half (0-50%)
-	// - Hihat: fires every tick in middle section (25-75%)
+	// - Kick: ritardando distribution (events getting further apart)
+	// - Hihat: ritardando distribution (lighter curve than kick)
 
 	kickPattern := modulated.NewSimpleKickPattern(
-		conductor,
 		"kick",
 		36,           // MIDI note (bass drum)
 		0.8,          // velocity
 		1,            // subdivision (default: once per tick)
 		phraseLength, // phrase length
+		8,            // events (8 kicks across phrase)
+		2.0,          // curve (moderate ritardando)
 	)
 
 	hihatPattern := modulated.NewSimpleHihatPattern(
-		conductor,
 		"hihat",
 		0.6,          // velocity
 		1,            // subdivision (default: once per tick)
 		phraseLength, // phrase length
+		6,            // events (6 hihats across phrase)
+		1.5,          // curve (lighter ritardando)
 	)
 
 	patterns := []sequencers.Pattern{kickPattern, hihatPattern}

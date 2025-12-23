@@ -3,13 +3,11 @@ package rand
 import (
 	"fmt"
 
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 )
 
 // GatedPattern fires events only when within a specified tick range of the phrase
 type GatedPattern struct {
-	conductor    *conductors.Conductor
 	name         string  // event name (e.g., "kick", "hihat")
 	note         uint8   // MIDI note number
 	velocity     float64 // event velocity
@@ -25,7 +23,6 @@ type GatedPattern struct {
 // startTick: first tick to fire (inclusive)
 // endTick: last tick to fire (exclusive)
 func NewGatedPattern(
-	conductor *conductors.Conductor,
 	name string,
 	note uint8,
 	velocity float64,
@@ -34,7 +31,6 @@ func NewGatedPattern(
 	phraseLength int,
 ) *GatedPattern {
 	return &GatedPattern{
-		conductor:    conductor,
 		name:         name,
 		note:         note,
 		velocity:     velocity,

@@ -3,14 +3,12 @@ package markov_chord
 import (
 	"fmt"
 
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 )
 
 // KickPattern fires kick events using Markov chain during percussion sections
 type KickPattern struct {
-	conductor    *conductors.Conductor
 	chordPattern *ChordPattern // reference to chord pattern for section state
 	name         string
 	frequency    float32
@@ -21,7 +19,6 @@ type KickPattern struct {
 
 // NewKickPattern creates a new kick pattern
 func NewKickPattern(
-	conductor *conductors.Conductor,
 	chordPattern *ChordPattern,
 	name string,
 	frequency float32,
@@ -39,7 +36,6 @@ func NewKickPattern(
 	chain.SetTransitionProbability("silent", "playing", 0.6)
 
 	return &KickPattern{
-		conductor:    conductor,
 		chordPattern: chordPattern,
 		name:         name,
 		frequency:    frequency,

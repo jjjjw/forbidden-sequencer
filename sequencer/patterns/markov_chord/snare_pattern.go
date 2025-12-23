@@ -3,14 +3,12 @@ package markov_chord
 import (
 	"fmt"
 
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 )
 
 // SnarePattern fires snare events using Markov chain during percussion sections
 type SnarePattern struct {
-	conductor    *conductors.Conductor
 	chordPattern *ChordPattern
 	name         string
 	velocity     float64
@@ -20,7 +18,6 @@ type SnarePattern struct {
 
 // NewSnarePattern creates a new snare pattern
 func NewSnarePattern(
-	conductor *conductors.Conductor,
 	chordPattern *ChordPattern,
 	name string,
 	velocity float64,
@@ -37,7 +34,6 @@ func NewSnarePattern(
 	chain.SetTransitionProbability("silent", "playing", 0.3)
 
 	return &SnarePattern{
-		conductor:    conductor,
 		chordPattern: chordPattern,
 		name:         name,
 		velocity:     velocity,

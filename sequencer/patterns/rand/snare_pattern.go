@@ -3,7 +3,6 @@ package rand
 import (
 	"fmt"
 
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 )
@@ -11,7 +10,6 @@ import (
 // SnarePattern fires a snare event at 3/4 of the phrase, with Markov chain deciding whether to trigger
 // Other patterns can check if snare will trigger to adjust their behavior
 type SnarePattern struct {
-	conductor      *conductors.Conductor
 	name           string
 	velocity       float64
 	paused         bool
@@ -25,7 +23,6 @@ type SnarePattern struct {
 
 // NewSnarePattern creates a new snare pattern
 func NewSnarePattern(
-	conductor *conductors.Conductor,
 	name string,
 	velocity float64,
 	phraseLength int,
@@ -42,7 +39,6 @@ func NewSnarePattern(
 	chain.SetTransitionProbability("silent", "trigger", 0.6)
 
 	return &SnarePattern{
-		conductor:      conductor,
 		name:           name,
 		velocity:       velocity,
 		paused:         true,

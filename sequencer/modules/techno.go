@@ -2,6 +2,7 @@ package modules
 
 import (
 	"forbidden_sequencer/sequencer/conductors"
+	"forbidden_sequencer/sequencer/lib"
 	"forbidden_sequencer/sequencer/patterns/techno"
 	"forbidden_sequencer/sequencer/sequencers"
 )
@@ -11,8 +12,11 @@ import (
 // ticksPerBeat: tick resolution (4 = 16th notes, 8 = 32nd notes)
 // Returns: slice of patterns
 func NewTechnoModule(conductor *conductors.Conductor, ticksPerBeat int) []sequencers.Pattern {
-	// Create pattern with conductor reference
-	pattern := techno.NewTechnoPattern(conductor, ticksPerBeat)
+	// Create distribution: fire every beat (four-on-the-floor)
+	distribution := lib.NewEvenDistribution(1, 0)
+
+	// Create pattern with distribution
+	pattern := techno.NewTechnoPattern(distribution, ticksPerBeat)
 
 	// Assemble into pattern slice
 	return []sequencers.Pattern{pattern}

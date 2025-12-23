@@ -3,7 +3,6 @@ package rand
 import (
 	"fmt"
 
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 )
@@ -12,7 +11,6 @@ import (
 // States: "playing" and "silent"
 // Silences after snare fires in the phrase
 type KickPattern struct {
-	conductor    *conductors.Conductor
 	snarePattern *SnarePattern // reference to snare pattern for trigger state
 	name         string        // event name
 	frequency    float32       // frequency in Hz
@@ -23,7 +21,6 @@ type KickPattern struct {
 
 // NewKickPattern creates a new kick pattern
 func NewKickPattern(
-	conductor *conductors.Conductor,
 	snarePattern *SnarePattern,
 	name string,
 	frequency float32,
@@ -42,7 +39,6 @@ func NewKickPattern(
 	chain.SetTransitionProbability("silent", "playing", 0.5)
 
 	return &KickPattern{
-		conductor:    conductor,
 		snarePattern: snarePattern,
 		name:         name,
 		frequency:    frequency,

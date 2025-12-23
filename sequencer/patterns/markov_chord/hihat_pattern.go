@@ -3,14 +3,12 @@ package markov_chord
 import (
 	"fmt"
 
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 )
 
 // HihatPattern fires hihat events using Markov chain during percussion sections
 type HihatPattern struct {
-	conductor    *conductors.Conductor
 	chordPattern *ChordPattern
 	name         string
 	velocity     float64
@@ -20,7 +18,6 @@ type HihatPattern struct {
 
 // NewHihatPattern creates a new hihat pattern
 func NewHihatPattern(
-	conductor *conductors.Conductor,
 	chordPattern *ChordPattern,
 	name string,
 	velocity float64,
@@ -37,7 +34,6 @@ func NewHihatPattern(
 	chain.SetTransitionProbability("silent", "playing", 0.7)
 
 	return &HihatPattern{
-		conductor:    conductor,
 		chordPattern: chordPattern,
 		name:         name,
 		velocity:     velocity,

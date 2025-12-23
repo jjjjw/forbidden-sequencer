@@ -1,7 +1,6 @@
 package markov_chord
 
 import (
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 )
@@ -16,7 +15,6 @@ const (
 
 // ChordPattern plays 4-note chords and manages section state
 type ChordPattern struct {
-	conductor         *conductors.Conductor
 	rootNote          uint8     // root MIDI note
 	scale             lib.Scale // scale for chord notes
 	velocity          float64   // chord velocity
@@ -32,7 +30,6 @@ type ChordPattern struct {
 
 // NewChordPattern creates a new chord pattern
 func NewChordPattern(
-	conductor *conductors.Conductor,
 	rootNote uint8,
 	scale lib.Scale,
 	velocity float64,
@@ -40,7 +37,6 @@ func NewChordPattern(
 	phrasesPerSection int,
 ) *ChordPattern {
 	return &ChordPattern{
-		conductor:         conductor,
 		rootNote:          rootNote,
 		scale:             scale,
 		velocity:          velocity,

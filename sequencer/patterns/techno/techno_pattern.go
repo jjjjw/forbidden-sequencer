@@ -1,13 +1,13 @@
 package techno
 
 import (
-	"forbidden_sequencer/sequencer/conductors"
 	"forbidden_sequencer/sequencer/events"
+	"forbidden_sequencer/sequencer/lib"
 )
 
-// TechnoPattern generates kick and hihat events on beats
+// TechnoPattern generates kick and hihat events using a distribution
 type TechnoPattern struct {
-	conductor    *conductors.Conductor
+	distribution lib.Distribution
 	paused       bool
 	ticksPerBeat int   // number of ticks per beat
 	tickInBeat   int   // current tick within beat
@@ -15,9 +15,9 @@ type TechnoPattern struct {
 }
 
 // NewTechnoPattern creates a new techno pattern
-func NewTechnoPattern(conductor *conductors.Conductor, ticksPerBeat int) *TechnoPattern {
+func NewTechnoPattern(distribution lib.Distribution, ticksPerBeat int) *TechnoPattern {
 	return &TechnoPattern{
-		conductor:    conductor,
+		distribution: distribution,
 		paused:       true,
 		ticksPerBeat: ticksPerBeat,
 		tickInBeat:   0,
@@ -62,8 +62,8 @@ func (t *TechnoPattern) GetEventsForTick(tick int64) []events.TickEvent {
 		return nil
 	}
 
-	// Only schedule on beat boundaries (tick 0 in beat)
-	if t.tickInBeat != 0 {
+	// Use distribution to determine if we should fire
+	if !t.distribution.ShouldFire(t.tickInBeat, t.ticksPerBeat) {
 		return nil
 	}
 
