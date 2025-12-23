@@ -129,23 +129,30 @@ func bjorklundRecurse(pattern [][]bool, ones int, zeros int) []bool {
 // AccelerandoDistribution creates events that get closer together over the phrase
 // Uses exponential spacing: x---x--x-xx
 type AccelerandoDistribution struct {
-	Events int       // number of events in phrase
-	Curve  float64   // curve factor (1.0 = linear, >1 = exponential acceleration)
-	ticks  []int     // precomputed tick positions
+	Events              int       // number of events in phrase
+	Curve               float64   // curve factor (1.0 = linear, >1 = exponential acceleration)
+	ticks               []int     // precomputed tick positions (quantized)
+	continuousPositions []float64 // continuous positions for non-quantized mode
 }
 
 // NewAccelerandoDistribution creates a distribution with accelerating spacing
 func NewAccelerandoDistribution(events int, phraseLength int, curve float64) *AccelerandoDistribution {
 	if events <= 0 {
-		return &AccelerandoDistribution{Events: 0, Curve: curve, ticks: []int{}}
+		return &AccelerandoDistribution{
+			Events:              0,
+			Curve:               curve,
+			ticks:               []int{},
+			continuousPositions: []float64{},
+		}
 	}
 	if curve <= 0 {
 		curve = 1.0
 	}
 
-	// Calculate tick positions using exponential spacing
+	// Calculate both continuous and quantized positions
 	tickSet := make(map[int]bool)
 	ticks := make([]int, 0, events)
+	continuousPositions := make([]float64, 0, events)
 
 	for i := 0; i < events; i++ {
 		// Normalize position 0.0 to 1.0
@@ -158,10 +165,14 @@ func NewAccelerandoDistribution(events int, phraseLength int, curve float64) *Ac
 		// We want more space early, less later, so invert: 1 - t^curve
 		curved := 1.0 - math.Pow(1.0-t, curve)
 
-		// Map to tick position
-		tick := int(curved * float64(phraseLength-1))
+		// Store continuous position (in ticks as float)
+		continuousPos := curved * float64(phraseLength-1)
+		continuousPositions = append(continuousPositions, continuousPos)
 
-		// Only add if not duplicate
+		// Map to quantized tick position
+		tick := int(continuousPos)
+
+		// Only add if not duplicate (for quantized mode)
 		if !tickSet[tick] {
 			tickSet[tick] = true
 			ticks = append(ticks, tick)
@@ -169,9 +180,10 @@ func NewAccelerandoDistribution(events int, phraseLength int, curve float64) *Ac
 	}
 
 	return &AccelerandoDistribution{
-		Events: len(ticks), // actual number of unique events
-		Curve:  curve,
-		ticks:  ticks,
+		Events:              len(ticks), // actual number of unique events (quantized)
+		Curve:               curve,
+		ticks:               ticks,
+		continuousPositions: continuousPositions,
 	}
 }
 
@@ -185,26 +197,43 @@ func (d *AccelerandoDistribution) ShouldFire(tickInPhrase int, phraseLength int)
 	return false
 }
 
+// GetActualEvents returns the actual number of unique events after quantization
+func (d *AccelerandoDistribution) GetActualEvents() int {
+	return len(d.ticks)
+}
+
+// GetContinuousPositions returns the continuous positions for non-quantized mode
+func (d *AccelerandoDistribution) GetContinuousPositions() []float64 {
+	return d.continuousPositions
+}
+
 // RitardandoDistribution creates events that get further apart over the phrase
 // Uses exponential spacing: xx-x--x---x
 type RitardandoDistribution struct {
-	Events int       // number of events in phrase
-	Curve  float64   // curve factor (1.0 = linear, >1 = exponential deceleration)
-	ticks  []int     // precomputed tick positions
+	Events            int       // number of events in phrase
+	Curve             float64   // curve factor (1.0 = linear, >1 = exponential deceleration)
+	ticks             []int     // precomputed tick positions (quantized)
+	continuousPositions []float64 // continuous positions for non-quantized mode
 }
 
 // NewRitardandoDistribution creates a distribution with decelerating spacing
 func NewRitardandoDistribution(events int, phraseLength int, curve float64) *RitardandoDistribution {
 	if events <= 0 {
-		return &RitardandoDistribution{Events: 0, Curve: curve, ticks: []int{}}
+		return &RitardandoDistribution{
+			Events:              0,
+			Curve:               curve,
+			ticks:               []int{},
+			continuousPositions: []float64{},
+		}
 	}
 	if curve <= 0 {
 		curve = 1.0
 	}
 
-	// Calculate tick positions using exponential spacing
+	// Calculate both continuous and quantized positions
 	tickSet := make(map[int]bool)
 	ticks := make([]int, 0, events)
+	continuousPositions := make([]float64, 0, events)
 
 	for i := 0; i < events; i++ {
 		// Normalize position 0.0 to 1.0
@@ -216,10 +245,14 @@ func NewRitardandoDistribution(events int, phraseLength int, curve float64) *Rit
 		// Apply curve (events get further apart)
 		curved := math.Pow(t, curve)
 
-		// Map to tick position
-		tick := int(curved * float64(phraseLength-1))
+		// Store continuous position (in ticks as float)
+		continuousPos := curved * float64(phraseLength-1)
+		continuousPositions = append(continuousPositions, continuousPos)
 
-		// Only add if not duplicate
+		// Map to quantized tick position
+		tick := int(continuousPos)
+
+		// Only add if not duplicate (for quantized mode)
 		if !tickSet[tick] {
 			tickSet[tick] = true
 			ticks = append(ticks, tick)
@@ -227,9 +260,10 @@ func NewRitardandoDistribution(events int, phraseLength int, curve float64) *Rit
 	}
 
 	return &RitardandoDistribution{
-		Events: len(ticks), // actual number of unique events
-		Curve:  curve,
-		ticks:  ticks,
+		Events:              len(ticks), // actual number of unique events (quantized)
+		Curve:               curve,
+		ticks:               ticks,
+		continuousPositions: continuousPositions,
 	}
 }
 
@@ -241,4 +275,14 @@ func (d *RitardandoDistribution) ShouldFire(tickInPhrase int, phraseLength int) 
 		}
 	}
 	return false
+}
+
+// GetActualEvents returns the actual number of unique events after quantization
+func (d *RitardandoDistribution) GetActualEvents() int {
+	return len(d.ticks)
+}
+
+// GetContinuousPositions returns the continuous positions for non-quantized mode
+func (d *RitardandoDistribution) GetContinuousPositions() []float64 {
+	return d.continuousPositions
 }

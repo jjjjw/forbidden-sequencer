@@ -4,13 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"forbidden_sequencer/sequencer/events"
-
 	tea "github.com/charmbracelet/bubbletea"
 )
-
-// EventMsg is sent when an event is received from the sequencer
-type EventMsg events.ScheduledEvent
 
 // Init implements tea.Model
 func (m Model) Init() tea.Cmd {
@@ -23,25 +18,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
-		return m, nil
-
-	case EventMsg:
-		// Add event to log (skip rests)
-		event := events.ScheduledEvent(msg)
-		if event.Event.Type == events.EventTypeRest {
-			return m, nil
-		}
-		entry := EventLogEntry{
-			Name:         event.Event.Name,
-			ReceivedTime: time.Now(),
-			Timestamp:    event.Timing.Timestamp,
-		}
-		// Prepend to keep newest first
-		m.EventLog = append([]EventLogEntry{entry}, m.EventLog...)
-		// Keep only last 100 events
-		if len(m.EventLog) > 100 {
-			m.EventLog = m.EventLog[:100]
-		}
 		return m, nil
 
 	case tea.KeyMsg:

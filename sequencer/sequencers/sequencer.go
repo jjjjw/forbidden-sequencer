@@ -20,6 +20,14 @@ type Pattern interface {
 	Stop()
 }
 
+// Visualizer is an optional interface for patterns that can visualize their distribution
+type Visualizer interface {
+	Visualize() string // Returns visual pattern like "x---x--x-"
+	GetPhraseLength() int
+	GetTickInPhrase() int
+	GetPatternName() string
+}
+
 // Sequencer manages multiple patterns and outputs events through an adapter
 type Sequencer struct {
 	patterns          []Pattern
@@ -237,6 +245,11 @@ func (s *Sequencer) SetPatterns(patterns []Pattern) {
 	if s.debugLog != nil {
 		s.debugLog.Printf("SetPatterns: loaded %d new patterns", len(patterns))
 	}
+}
+
+// GetPatterns returns the current patterns
+func (s *Sequencer) GetPatterns() []Pattern {
+	return s.patterns
 }
 
 // String returns a string representation of the sequencer

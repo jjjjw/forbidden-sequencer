@@ -35,6 +35,8 @@ type ModulatedRhythmConfig struct {
 	kickEvents       int
 	hihatCurve       float64
 	hihatEvents      int
+	kickQuantized    bool
+	hihatQuantized   bool
 }
 
 // NewModulatedRhythmConfig creates a new modulated rhythm config
@@ -49,10 +51,12 @@ func NewModulatedRhythmConfig(conductor *conductors.Conductor) *ModulatedRhythmC
 		hihatPattern:     hihatPattern,
 		kickSubdivision:  1,
 		hihatSubdivision: 1,
-		kickCurve:        2.0, // moderate ritardando
-		kickEvents:       8,   // 8 events across phrase
-		hihatCurve:       1.5, // lighter ritardando
-		hihatEvents:      6,   // 6 events across phrase
+		kickCurve:        2.0,  // moderate ritardando
+		kickEvents:       8,    // 8 events across phrase
+		hihatCurve:       1.5,  // lighter ritardando
+		hihatEvents:      6,    // 6 events across phrase
+		kickQuantized:    true, // default to quantized
+		hihatQuantized:   true, // default to quantized
 	}
 }
 
@@ -63,7 +67,7 @@ func (c *ModulatedRhythmConfig) GetName() string {
 
 // GetKeybindings returns the module-specific controls
 func (c *ModulatedRhythmConfig) GetKeybindings() string {
-	return "h/l: kick subdiv | H/L: hihat subdiv | c/C: kick curve | v/V: hihat curve | e/E: kick events | r/R: hihat events"
+	return "h/l: kick subdiv | H/L: hihat subdiv | c/C: kick curve | v/V: hihat curve | e/E: kick events | r/R: hihat events | z/Z: toggle quantize"
 }
 
 // GetStatus returns the current state
@@ -165,6 +169,18 @@ func (c *ModulatedRhythmConfig) HandleInput(msg tea.KeyMsg) bool {
 			c.hihatEvents++
 			c.hihatPattern.SetEvents(c.hihatEvents)
 		}
+		return true
+
+	case "z":
+		// Toggle kick quantization
+		c.kickQuantized = !c.kickQuantized
+		c.kickPattern.SetQuantized(c.kickQuantized)
+		return true
+
+	case "Z":
+		// Toggle hihat quantization
+		c.hihatQuantized = !c.hihatQuantized
+		c.hihatPattern.SetQuantized(c.hihatQuantized)
 		return true
 	}
 

@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	seqlib "forbidden_sequencer/sequencer/sequencers"
+
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 )
 
 // View returns the current screen view
@@ -90,8 +91,8 @@ func (m Model) viewMain() string {
 
 	left.WriteString(BoxStyle.Render(HelpStyle.Render(strings.Join(helpItems, "\n"))))
 
-	// Right panel - event log
-	right := m.viewEventLog()
+	// Right panel - pattern visualization
+	right := m.viewPatternVisualization()
 
 	// Join left and right panels
 	return lipgloss.JoinHorizontal(lipgloss.Top, left.String(), "  ", right)
@@ -126,42 +127,35 @@ func (m Model) viewSequencerList() string {
 	return b.String()
 }
 
-func (m Model) viewEventLog() string {
-	// Build rows
-	var rows [][]string
-	limit := 30
-	if len(m.EventLog) < limit {
-		limit = len(m.EventLog)
+func (m Model) viewPatternVisualization() string {
+	var b strings.Builder
+
+	// Get patterns from sequencer
+	if m.Sequencer == nil {
+		return BoxStyle.Render("No patterns loaded")
 	}
 
-	for i := 0; i < limit; i++ {
-		entry := m.EventLog[i]
-		scheduledTime := entry.Timestamp.Format("15:04:05.000")
-		rows = append(rows, []string{entry.Name, scheduledTime})
+	patterns := m.Sequencer.GetPatterns()
+	if len(patterns) == 0 {
+		return BoxStyle.Render("No patterns loaded")
 	}
 
-	// Create table
-	t := table.New().
-		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("241"))).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			style := lipgloss.NewStyle().Padding(0, 1)
-			if row == table.HeaderRow {
-				style = style.Bold(true)
-			}
-			// Set min widths
-			switch col {
-			case 0: // Event
-				style = style.Width(10)
-			case 1: // Time
-				style = style.Width(14)
-			}
-			return style
-		}).
-		Headers("Event", "Time").
-		Rows(rows...)
+	// Display each pattern that implements Visualizer
+	for _, pattern := range patterns {
+		// Type assert to check if pattern implements Visualizer
+		if viz, ok := pattern.(seqlib.Visualizer); ok {
+			// Pattern name with metadata
+			b.WriteString(StatusStyle.Render(viz.GetPatternName()))
+			b.WriteString("\n")
 
-	return t.String()
+			// Visualization
+			visualization := viz.Visualize()
+			b.WriteString(visualization)
+			b.WriteString("\n\n")
+		}
+	}
+
+	return BoxStyle.Render(b.String())
 }
 
 func (m Model) viewSettings() string {

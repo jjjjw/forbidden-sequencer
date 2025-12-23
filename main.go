@@ -8,7 +8,6 @@ import (
 
 	"forbidden_sequencer/sequencer/adapters"
 	"forbidden_sequencer/sequencer/conductors"
-	"forbidden_sequencer/sequencer/events"
 	seqlib "forbidden_sequencer/sequencer/sequencers"
 	"forbidden_sequencer/tui"
 	"forbidden_sequencer/tui/sequencers"
@@ -38,14 +37,11 @@ func initialModel() tui.Model {
 		}
 	}
 
-	// Create event channel (owned by model)
-	eventChan := make(chan events.ScheduledEvent, 100)
-
 	// Create global conductor with default tick duration (100ms)
 	conductor := conductors.NewConductor(100 * time.Millisecond)
 
 	// Create global sequencer (with empty patterns initially)
-	sequencer := seqlib.NewSequencer(nil, conductor, scAdapter, eventChan, *debug)
+	sequencer := seqlib.NewSequencer(nil, conductor, scAdapter, nil, *debug)
 
 	// Start the sequencer (this starts the runTickLoop)
 	sequencer.Start()
@@ -57,7 +53,6 @@ func initialModel() tui.Model {
 		Debug:     *debug,
 		Conductor: conductor,
 		Sequencer: sequencer,
-		EventChan: eventChan,
 	}
 
 	// Create module factories
@@ -95,13 +90,6 @@ func main() {
 
 	m := initialModel()
 	p := tea.NewProgram(m, tea.WithAltScreen())
-
-	// Single goroutine to forward events from the channel to TUI
-	go func() {
-		for event := range m.EventChan {
-			p.Send(tui.EventMsg(event))
-		}
-	}()
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)

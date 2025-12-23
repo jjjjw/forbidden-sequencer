@@ -1,6 +1,9 @@
 package techno
 
 import (
+	"fmt"
+	"strings"
+
 	"forbidden_sequencer/sequencer/events"
 	"forbidden_sequencer/sequencer/lib"
 )
@@ -102,4 +105,32 @@ func (t *TechnoPattern) GetEventsForTick(tick int64) []events.TickEvent {
 			},
 		},
 	}
+}
+
+// Visualize returns a visual representation of the pattern
+func (t *TechnoPattern) Visualize() string {
+	var sb strings.Builder
+	for i := 0; i < t.ticksPerBeat; i++ {
+		if t.distribution.ShouldFire(i, t.ticksPerBeat) {
+			sb.WriteString("x")
+		} else {
+			sb.WriteString("-")
+		}
+	}
+	return sb.String()
+}
+
+// GetPhraseLength returns the phrase length (same as ticks per beat for this pattern)
+func (t *TechnoPattern) GetPhraseLength() int {
+	return t.ticksPerBeat
+}
+
+// GetTickInPhrase returns the current tick within the beat
+func (t *TechnoPattern) GetTickInPhrase() int {
+	return t.tickInBeat
+}
+
+// GetPatternName returns the pattern name
+func (t *TechnoPattern) GetPatternName() string {
+	return fmt.Sprintf("techno (4-on-floor)")
 }
