@@ -47,4 +47,12 @@ var (
 			BorderForeground(lipgloss.Color("62")).
 			Padding(0, 1).
 			Foreground(lipgloss.Color("252"))
+
+	// Keybinding styles
+	KeyStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("212"))
+
+	DescStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241"))
 )

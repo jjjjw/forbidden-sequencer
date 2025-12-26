@@ -13,10 +13,14 @@ import (
 type ModulatedRhythmController struct {
 	sclangAdapter *adapters.OSCAdapter
 	phraseDur     float64
+	phraseEvents  int
 	kickCurve     float64
 	kickEvents    int
+	kickOffset    int
 	hihatCurve    float64
 	hihatEvents   int
+	hihatOffset   int
+	debug         bool
 	isPlaying     bool
 }
 
@@ -25,10 +29,14 @@ func NewModulatedRhythmController(sclangAdapter *adapters.OSCAdapter) *Modulated
 	return &ModulatedRhythmController{
 		sclangAdapter: sclangAdapter,
 		phraseDur:     2.0,
-		kickCurve:     2.0,
+		phraseEvents:  16,
+		kickCurve:     1.5,
 		kickEvents:    8,
+		kickOffset:    0,
 		hihatCurve:    1.5,
 		hihatEvents:   8,
+		hihatOffset:   0,
+		debug:         false,
 		isPlaying:     false,
 	}
 }
@@ -40,20 +48,45 @@ func (c *ModulatedRhythmController) GetName() string {
 
 // GetKeybindings returns the controller-specific controls
 func (c *ModulatedRhythmController) GetKeybindings() string {
-	return "d/D: phrase duration | c/C: kick curve | v/V: hihat curve | e/E: kick events | r/R: hihat events"
+	return `p: play/stop
+space: pause/resume
+d/D: phrase dur
+1/!: phrase events
+c/C: kick curve
+v/V: hihat curve
+e/E: kick events
+r/R: hihat events
+[/]: kick offset
+o/O: hihat offset
+x: debug`
 }
 
 // GetStatus returns the current state
 func (c *ModulatedRhythmController) GetStatus() string {
-	return fmt.Sprintf("Phrase: %.1fs | Kick: curve=%.1f, events=%d | Hihat: curve=%.1f, events=%d",
-		c.phraseDur, c.kickCurve, c.kickEvents, c.hihatCurve, c.hihatEvents)
+	debugStr := ""
+	if c.debug {
+		debugStr = " | DEBUG"
+	}
+	return fmt.Sprintf("Phrase: %.1fs, %d events | Kick: curve=%.1f, events=%d, offset=%+d | Hihat: curve=%.1f, events=%d, offset=%+d%s",
+		c.phraseDur, c.phraseEvents, c.kickCurve, c.kickEvents, c.kickOffset, c.hihatCurve, c.hihatEvents, c.hihatOffset, debugStr)
 }
 
 // HandleInput processes controller-specific input
 func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 	switch msg.String() {
-	case " ", "p":
-		// Toggle play/pause
+	case " ":
+		// Toggle pause/resume
+		if c.isPlaying {
+			c.sendOSC("/pattern/mod_rhy/pause")
+			c.isPlaying = false
+		} else {
+			c.sendOSC("/pattern/mod_rhy/resume")
+			c.isPlaying = true
+		}
+		return true
+
+	case "p":
+		// Toggle play/stop (reset position)
 		if c.isPlaying {
 			c.sendOSC("/pattern/mod_rhy/stop")
 			c.isPlaying = false
@@ -142,14 +175,72 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 			c.sendOSC("/pattern/mod_rhy/hihat/events", int32(c.hihatEvents))
 		}
 		return true
+
+	case "1":
+		// Decrease phrase events
+		if c.phraseEvents > 16 {
+			c.phraseEvents--
+			c.sendOSC("/pattern/mod_rhy/phrase_events", int32(c.phraseEvents))
+		}
+		return true
+
+	case "!":
+		// Increase phrase events
+		if c.phraseEvents < 32 {
+			c.phraseEvents++
+			c.sendOSC("/pattern/mod_rhy/phrase_events", int32(c.phraseEvents))
+		}
+		return true
+
+	case "[":
+		// Decrease kick offset
+		if c.kickOffset > -(c.phraseEvents - 1) {
+			c.kickOffset--
+			c.sendOSC("/pattern/mod_rhy/kick/offset", int32(c.kickOffset))
+		}
+		return true
+
+	case "]":
+		// Increase kick offset
+		if c.kickOffset < (c.phraseEvents - 1) {
+			c.kickOffset++
+			c.sendOSC("/pattern/mod_rhy/kick/offset", int32(c.kickOffset))
+		}
+		return true
+
+	case "o":
+		// Decrease hihat offset
+		if c.hihatOffset > -(c.phraseEvents - 1) {
+			c.hihatOffset--
+			c.sendOSC("/pattern/mod_rhy/hihat/offset", int32(c.hihatOffset))
+		}
+		return true
+
+	case "O":
+		// Increase hihat offset
+		if c.hihatOffset < (c.phraseEvents - 1) {
+			c.hihatOffset++
+			c.sendOSC("/pattern/mod_rhy/hihat/offset", int32(c.hihatOffset))
+		}
+		return true
+
+	case "x":
+		// Toggle debug
+		c.debug = !c.debug
+		debugInt := int32(0)
+		if c.debug {
+			debugInt = 1
+		}
+		c.sendOSC("/pattern/mod_rhy/debug", debugInt)
+		return true
 	}
 
 	return false
 }
 
-// Quit stops the pattern and cleans up
+// Quit stops the pattern and resets to defaults
 func (c *ModulatedRhythmController) Quit() {
-	c.sendOSC("/pattern/mod_rhy/stop")
+	c.sendOSC("/pattern/mod_rhy/reset")
 	c.isPlaying = false
 }
 

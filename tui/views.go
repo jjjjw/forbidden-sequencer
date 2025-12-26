@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss/list"
 )
 
 // View returns the current screen view
@@ -44,24 +46,33 @@ func (m Model) viewMain() string {
 	}
 
 	// Help - keybindings
-	var helpItems []string
-
-	// Controller-specific keybindings
 	if m.ActiveController != nil {
+		// Controller-specific keybindings
 		controllerHelp := m.ActiveController.GetKeybindings()
 		if controllerHelp != "" {
-			helpItems = append(helpItems, controllerHelp)
+			// Parse the keybindings and render as a list
+			lines := strings.Split(controllerHelp, "\n")
+			var items []any
+			for _, line := range lines {
+				if line == "" {
+					continue
+				}
+				// Split on ": " to separate key from description
+				parts := strings.SplitN(line, ": ", 2)
+				if len(parts) == 2 {
+					items = append(items, KeyStyle.Render(parts[0])+" "+DescStyle.Render(parts[1]))
+				} else {
+					items = append(items, line)
+				}
+			}
+
+			// Add global quit binding
+			items = append(items, KeyStyle.Render("q")+" "+DescStyle.Render("Quit"))
+
+			l := list.New(items...)
+			left.WriteString(BoxStyle.Render(l.String()))
 		}
 	}
-
-	// Global keybindings
-	globalHelp := []string{
-		"[space/p] Play/Pause",
-		"[q] Quit",
-	}
-	helpItems = append(helpItems, strings.Join(globalHelp, " • "))
-
-	left.WriteString(BoxStyle.Render(HelpStyle.Render(strings.Join(helpItems, "\n"))))
 
 	return left.String()
 }
