@@ -38,10 +38,8 @@ s.boot;
 // Load setup
 "<path>/forbidden_sequencer/supercollider/setup.scd".load;
 
-// Load patterns
+// Load pattern (example)
 "<path>/forbidden_sequencer/supercollider/patterns/curve_time.scd".load;
-"<path>/forbidden_sequencer/supercollider/patterns/markov_trig.scd".load;
-"<path>/forbidden_sequencer/supercollider/patterns/markov_chord.scd".load;
 ```
 
 ### 2. Start OSC Bridge
@@ -112,8 +110,3 @@ forbidden_sequencer/
 
 - **Web Interface** - See [`web/README.md`](web/README.md) for creating Svelte components and controls
 - **SuperCollider** - See [`supercollider/README.md`](supercollider/README.md) for pattern implementation and OSC responders
-
-## See Also
-
-- [`web/README.md`](web/README.md) - Full web interface guide
-- [`supercollider/README.md`](supercollider/README.md) - Pattern implementation and audio setup
