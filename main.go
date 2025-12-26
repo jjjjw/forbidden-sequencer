@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"forbidden_sequencer/sequencer/adapters"
+	"forbidden_sequencer/adapter"
 	"forbidden_sequencer/tui"
 	"forbidden_sequencer/tui/controllers"
 
@@ -20,12 +20,12 @@ func initialModel() tui.Model {
 	if err != nil {
 		fmt.Printf("Failed to load settings, using defaults: %v\n", err)
 		settings = &tui.Settings{
-			SelectedSequencer: "Ramp Time", // default
+			SelectedControllerIndex: 0, // default to first controller
 		}
 	}
 
 	// Initialize sclang OSC adapter (for pattern control)
-	sclangAdapter, err := adapters.SetupSClangAdapter()
+	sclangAdapter, err := adapter.SetupSClangAdapter()
 	if err != nil {
 		return tui.Model{
 			Settings: settings,
@@ -41,8 +41,20 @@ func initialModel() tui.Model {
 		Debug:         *debug,
 	}
 
-	// Create controller for modulated rhythm pattern
-	m.ActiveController = controllers.NewModulatedRhythmController(sclangAdapter)
+	// Create all available controllers
+	m.AvailableControllers = []controllers.Controller{
+		controllers.NewCurveTimeController(sclangAdapter),
+		controllers.NewMarkovTrigController(sclangAdapter),
+		controllers.NewMarkovChordController(sclangAdapter),
+	}
+
+	// Set initial controller from settings (with bounds checking)
+	m.ActiveControllerIndex = settings.SelectedControllerIndex
+	if m.ActiveControllerIndex < 0 || m.ActiveControllerIndex >= len(m.AvailableControllers) {
+		m.ActiveControllerIndex = 0 // fall back to first controller
+		settings.SelectedControllerIndex = 0
+	}
+	m.ActiveController = m.AvailableControllers[m.ActiveControllerIndex]
 
 	return m
 }

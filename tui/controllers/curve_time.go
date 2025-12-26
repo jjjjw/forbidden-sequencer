@@ -4,16 +4,15 @@ import (
 	"fmt"
 	"strings"
 
-	"forbidden_sequencer/sequencer/adapters"
+	"forbidden_sequencer/adapter"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/hypebeast/go-osc/osc"
 )
 
-// ModulatedRhythmController controls the mod_rhy pattern in sclang via OSC
-type ModulatedRhythmController struct {
-	sclangAdapter *adapters.OSCAdapter
-	phraseDur     float64
+// CurveTimeController controls the curve_time pattern in sclang via OSC
+type CurveTimeController struct {
+	sclangAdapter *adapter.OSCAdapter
+	baseEventDur  float64
 	phraseEvents  int
 	kickCurve     float64
 	kickEvents    int
@@ -26,11 +25,11 @@ type ModulatedRhythmController struct {
 	activeSynth   int // 0=phrase, 1=kick, 2=hihat
 }
 
-// NewModulatedRhythmController creates a new modulated rhythm controller
-func NewModulatedRhythmController(sclangAdapter *adapters.OSCAdapter) *ModulatedRhythmController {
-	return &ModulatedRhythmController{
+// NewCurveTimeController creates a new curve time controller
+func NewCurveTimeController(sclangAdapter *adapter.OSCAdapter) *CurveTimeController {
+	return &CurveTimeController{
 		sclangAdapter: sclangAdapter,
-		phraseDur:     2.0,
+		baseEventDur:  0.125,
 		phraseEvents:  16,
 		kickCurve:     1.5,
 		kickEvents:    8,
@@ -45,17 +44,16 @@ func NewModulatedRhythmController(sclangAdapter *adapters.OSCAdapter) *Modulated
 }
 
 // GetName returns the display name
-func (c *ModulatedRhythmController) GetName() string {
-	return "Ramp Time"
+func (c *CurveTimeController) GetName() string {
+	return "Curve Time"
 }
 
 // GetKeybindings returns the controller-specific controls
-func (c *ModulatedRhythmController) GetKeybindings() string {
+func (c *CurveTimeController) GetKeybindings() string {
 	return `p: play/stop
 space: pause/resume
-1: select kick
-2: select hihat
-d/D: phrase dur
+1-2: select synth
+d/D: base event dur
 r/R: phrase events
 c/C: curve (active synth)
 e/E: events (active synth)
@@ -64,11 +62,12 @@ x: debug`
 }
 
 // GetStatus returns the current state
-func (c *ModulatedRhythmController) GetStatus() string {
+func (c *CurveTimeController) GetStatus() string {
 	var status strings.Builder
 
 	// Phrase state
-	status.WriteString(fmt.Sprintf("Phrase: %.1fs, %d events\n\n", c.phraseDur, c.phraseEvents))
+	phraseDur := float64(c.phraseEvents) * c.baseEventDur
+	status.WriteString(fmt.Sprintf("Base: %.3fs, Events: %d, Phrase: %.2fs\n\n", c.baseEventDur, c.phraseEvents, phraseDur))
 
 	// Synths section
 	status.WriteString("Synths:\n")
@@ -78,14 +77,14 @@ func (c *ModulatedRhythmController) GetStatus() string {
 	if c.activeSynth == 1 {
 		kickPrefix = "> "
 	}
-	status.WriteString(fmt.Sprintf("%sKick: curve=%.1f, events=%d, offset=%+d\n", kickPrefix, c.kickCurve, c.kickEvents, c.kickOffset))
+	status.WriteString(fmt.Sprintf("%s1. Kick: curve=%.1f, events=%d, offset=%+d\n", kickPrefix, c.kickCurve, c.kickEvents, c.kickOffset))
 
 	// Hihat state (highlight if active)
 	hihatPrefix := "  "
 	if c.activeSynth == 2 {
 		hihatPrefix = "> "
 	}
-	status.WriteString(fmt.Sprintf("%sHihat: curve=%.1f, events=%d, offset=%+d", hihatPrefix, c.hihatCurve, c.hihatEvents, c.hihatOffset))
+	status.WriteString(fmt.Sprintf("%s2. Hihat: curve=%.1f, events=%d, offset=%+d", hihatPrefix, c.hihatCurve, c.hihatEvents, c.hihatOffset))
 
 	if c.debug {
 		status.WriteString("\nDEBUG")
@@ -95,15 +94,15 @@ func (c *ModulatedRhythmController) GetStatus() string {
 }
 
 // HandleInput processes controller-specific input
-func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
+func (c *CurveTimeController) HandleInput(msg tea.KeyMsg) bool {
 	switch msg.String() {
 	case " ":
 		// Toggle pause/resume
 		if c.isPlaying {
-			c.sendOSC("/pattern/mod_rhy/pause")
+			c.sclangAdapter.Send("/pattern/curve_time/pause")
 			c.isPlaying = false
 		} else {
-			c.sendOSC("/pattern/mod_rhy/resume")
+			c.sclangAdapter.Send("/pattern/curve_time/resume")
 			c.isPlaying = true
 		}
 		return true
@@ -111,10 +110,10 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 	case "p":
 		// Toggle play/stop (reset position)
 		if c.isPlaying {
-			c.sendOSC("/pattern/mod_rhy/stop")
+			c.sclangAdapter.Send("/pattern/curve_time/stop")
 			c.isPlaying = false
 		} else {
-			c.sendOSC("/pattern/mod_rhy/play")
+			c.sclangAdapter.Send("/pattern/curve_time/play")
 			c.isPlaying = true
 		}
 		return true
@@ -130,18 +129,18 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		return true
 
 	case "d":
-		// Decrease phrase duration
-		if c.phraseDur > 0.5 {
-			c.phraseDur -= 0.1
-			c.sendOSC("/pattern/mod_rhy/phrase_dur", float32(c.phraseDur))
+		// Decrease base event duration
+		if c.baseEventDur > 0.025 {
+			c.baseEventDur -= 0.005
+			c.sclangAdapter.Send("/pattern/curve_time/base_event_dur", float32(c.baseEventDur))
 		}
 		return true
 
 	case "D":
-		// Increase phrase duration
-		if c.phraseDur < 10.0 {
-			c.phraseDur += 0.1
-			c.sendOSC("/pattern/mod_rhy/phrase_dur", float32(c.phraseDur))
+		// Increase base event duration
+		if c.baseEventDur < 1.0 {
+			c.baseEventDur += 0.005
+			c.sclangAdapter.Send("/pattern/curve_time/base_event_dur", float32(c.baseEventDur))
 		}
 		return true
 
@@ -149,7 +148,7 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		// Decrease phrase events
 		if c.phraseEvents > 16 {
 			c.phraseEvents--
-			c.sendOSC("/pattern/mod_rhy/phrase_events", int32(c.phraseEvents))
+			c.sclangAdapter.Send("/pattern/curve_time/phrase_events", int32(c.phraseEvents))
 		}
 		return true
 
@@ -157,7 +156,7 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		// Increase phrase events
 		if c.phraseEvents < 32 {
 			c.phraseEvents++
-			c.sendOSC("/pattern/mod_rhy/phrase_events", int32(c.phraseEvents))
+			c.sclangAdapter.Send("/pattern/curve_time/phrase_events", int32(c.phraseEvents))
 		}
 		return true
 
@@ -166,12 +165,12 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		if c.activeSynth == 1 {
 			if c.kickCurve > 0.5 {
 				c.kickCurve -= 0.1
-				c.sendOSC("/pattern/mod_rhy/kick/curve", float32(c.kickCurve))
+				c.sclangAdapter.Send("/pattern/curve_time/kick/curve", float32(c.kickCurve))
 			}
 		} else if c.activeSynth == 2 {
 			if c.hihatCurve > 0.5 {
 				c.hihatCurve -= 0.1
-				c.sendOSC("/pattern/mod_rhy/hihat/curve", float32(c.hihatCurve))
+				c.sclangAdapter.Send("/pattern/curve_time/hihat/curve", float32(c.hihatCurve))
 			}
 		}
 		return true
@@ -181,12 +180,12 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		if c.activeSynth == 1 {
 			if c.kickCurve < 2.0 {
 				c.kickCurve += 0.1
-				c.sendOSC("/pattern/mod_rhy/kick/curve", float32(c.kickCurve))
+				c.sclangAdapter.Send("/pattern/curve_time/kick/curve", float32(c.kickCurve))
 			}
 		} else if c.activeSynth == 2 {
 			if c.hihatCurve < 2.0 {
 				c.hihatCurve += 0.1
-				c.sendOSC("/pattern/mod_rhy/hihat/curve", float32(c.hihatCurve))
+				c.sclangAdapter.Send("/pattern/curve_time/hihat/curve", float32(c.hihatCurve))
 			}
 		}
 		return true
@@ -196,12 +195,12 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		if c.activeSynth == 1 {
 			if c.kickEvents > 1 {
 				c.kickEvents--
-				c.sendOSC("/pattern/mod_rhy/kick/events", int32(c.kickEvents))
+				c.sclangAdapter.Send("/pattern/curve_time/kick/events", int32(c.kickEvents))
 			}
 		} else if c.activeSynth == 2 {
 			if c.hihatEvents > 1 {
 				c.hihatEvents--
-				c.sendOSC("/pattern/mod_rhy/hihat/events", int32(c.hihatEvents))
+				c.sclangAdapter.Send("/pattern/curve_time/hihat/events", int32(c.hihatEvents))
 			}
 		}
 		return true
@@ -211,12 +210,12 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		if c.activeSynth == 1 {
 			if c.kickEvents < 16 {
 				c.kickEvents++
-				c.sendOSC("/pattern/mod_rhy/kick/events", int32(c.kickEvents))
+				c.sclangAdapter.Send("/pattern/curve_time/kick/events", int32(c.kickEvents))
 			}
 		} else if c.activeSynth == 2 {
 			if c.hihatEvents < 16 {
 				c.hihatEvents++
-				c.sendOSC("/pattern/mod_rhy/hihat/events", int32(c.hihatEvents))
+				c.sclangAdapter.Send("/pattern/curve_time/hihat/events", int32(c.hihatEvents))
 			}
 		}
 		return true
@@ -226,12 +225,12 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		if c.activeSynth == 1 {
 			if c.kickOffset > -(c.phraseEvents - 1) {
 				c.kickOffset--
-				c.sendOSC("/pattern/mod_rhy/kick/offset", int32(c.kickOffset))
+				c.sclangAdapter.Send("/pattern/curve_time/kick/offset", int32(c.kickOffset))
 			}
 		} else if c.activeSynth == 2 {
 			if c.hihatOffset > -(c.phraseEvents - 1) {
 				c.hihatOffset--
-				c.sendOSC("/pattern/mod_rhy/hihat/offset", int32(c.hihatOffset))
+				c.sclangAdapter.Send("/pattern/curve_time/hihat/offset", int32(c.hihatOffset))
 			}
 		}
 		return true
@@ -241,12 +240,12 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		if c.activeSynth == 1 {
 			if c.kickOffset < (c.phraseEvents - 1) {
 				c.kickOffset++
-				c.sendOSC("/pattern/mod_rhy/kick/offset", int32(c.kickOffset))
+				c.sclangAdapter.Send("/pattern/curve_time/kick/offset", int32(c.kickOffset))
 			}
 		} else if c.activeSynth == 2 {
 			if c.hihatOffset < (c.phraseEvents - 1) {
 				c.hihatOffset++
-				c.sendOSC("/pattern/mod_rhy/hihat/offset", int32(c.hihatOffset))
+				c.sclangAdapter.Send("/pattern/curve_time/hihat/offset", int32(c.hihatOffset))
 			}
 		}
 		return true
@@ -258,7 +257,7 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		if c.debug {
 			debugInt = 1
 		}
-		c.sendOSC("/pattern/mod_rhy/debug", debugInt)
+		c.sclangAdapter.Send("/pattern/curve_time/debug", debugInt)
 		return true
 	}
 
@@ -266,20 +265,7 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 }
 
 // Quit stops the pattern and resets to defaults
-func (c *ModulatedRhythmController) Quit() {
-	c.sendOSC("/pattern/mod_rhy/reset")
+func (c *CurveTimeController) Quit() {
+	c.sclangAdapter.Send("/pattern/curve_time/reset")
 	c.isPlaying = false
-}
-
-// sendOSC sends an OSC message to sclang
-func (c *ModulatedRhythmController) sendOSC(address string, args ...interface{}) {
-	msg := osc.NewMessage(address)
-	for _, arg := range args {
-		msg.Append(arg)
-	}
-
-	client := osc.NewClient(c.sclangAdapter.GetHost(), c.sclangAdapter.GetPort())
-	if err := client.Send(msg); err != nil {
-		fmt.Printf("OSC send error: %v\n", err)
-	}
 }

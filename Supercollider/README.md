@@ -1,112 +1,63 @@
 # SuperCollider Integration
 
-This folder contains SuperCollider SynthDefs and setup scripts for the Forbidden Sequencer.
+This folder contains SuperCollider SynthDefs, pattern implementations, and setup scripts for the Forbidden Sequencer.
 
 ## Overview
 
-The sequencer sends events to SuperCollider via **direct server commands** (OSC protocol):
+The Forbidden Sequencer uses **SuperCollider patterns** for generative music creation, controlled via **OSC messages** from a **Go TUI**.
 
-- Go → **scsynth** (port 57110) using `/n_free` and `/s_new` commands
-- **Server-side scheduling** with timestamped OSC bundles
-- **Node-based voice management**: intelligent per-event polyphony control via `max_voices` parameter
-
-### Event Flow
+### System Architecture
 
 ```
-Go Sequencer
-    ↓ (timestamped OSC bundle)
-scsynth (port 57110)
-    ↓ (server scheduler)
-/n_free [nodeID]      → free oldest voice if max_voices exceeded (voice stealing)
-/s_new [synthDef...]  → create new synth with unique node ID
+Go TUI (Terminal UI)
+    ↓ (OSC control messages)
+SuperCollider sclang (port 57120)
+    ↓ (pattern control, synth triggering)
+SuperCollider scsynth (audio server)
+    ↓ (audio output)
+Audio Interface
 ```
 
-### Mappings
-
-| Event | SynthDef | Max Voices | Bus |
-|-------|----------|------------|-----|
-| kick  | bd       | 1 (default)| 0 (master out) |
-| snare | cp       | 1 (default)| 10 (reverb) |
-| hihat | hh       | 1 (default)| 0 (master out) |
-| fm    | fm2op    | 2          | 10 (reverb) |
-| arp   | arp      | 1 (default)| 10 (reverb) |
+**Control Flow:**
+- Go TUI sends OSC control messages to **sclang** (port 57120)
+- Patterns run in sclang and respond to OSC commands
+- Patterns trigger synths on **scsynth** server (internal communication)
+- scsynth generates audio output
 
 ## Setup
 
 ### 1. Start SuperCollider
-1. Open SuperCollider IDE
-2. Boot the audio server: `s.boot;`
-3. Load and run the setup script:
+
+Open SuperCollider IDE and run:
 
 ```supercollider
-// Navigate to the Supercollider folder and run:
-"setup.scd".load;
+// Boot the audio server
+s.boot;
+
+// Load the setup (synthdefs + effects)
+"<path-to>/forbidden_sequencer/supercollider/setup.scd".load;
+
+// Load patterns (choose one or more)
+"<path-to>/forbidden_sequencer/supercollider/patterns/curve_time.scd".load;
+"<path-to>/forbidden_sequencer/supercollider/patterns/markov_trig.scd".load;
+"<path-to>/forbidden_sequencer/supercollider/patterns/markov_chord.scd".load;
 ```
 
-Or execute the setup script directly from the IDE:
-```supercollider
-// Load setup (which also loads synthdefs)
-"<path-to-forbidden_sequencer>/Supercollider/setup.scd".load;
+SuperCollider will listen for OSC messages on port **57120** (default sclang port).
+
+### 2. Start the Go TUI
+
+```bash
+cd forbidden_sequencer
+go run .
 ```
 
-### 2. Start the Sequencer
-1. Run the forbidden_sequencer:
-   ```bash
-   go run .
-   ```
-2. Press `space` or `p` to start playback
+The TUI will connect to sclang on `localhost:57120` and send OSC control messages to the loaded patterns.
 
-SuperCollider server will listen on port **57110** (default scsynth port) for direct server commands.
-
-## Files
-
-- **synthdefs.scd** - SynthDef definitions for bd, cp, hh, fm2op, arp, and fdnReverb
-- **setup.scd** - Initialize audio buses and reverb
-- **README.md** - This file
-
-## SynthDefs
-
-### `\bd` (Bass Drum)
-- Pitched sine wave with frequency sweep
-- Parameters: `freq` (50 Hz default), `len`, `amp`, `out`, `ratio`, `sweep`
-
-### `\cp` (Clap)
-- Filtered noise with randomized envelope for natural clap sound
-- Parameters: `len`, `amp`, `out`
-
-### `\hh` (Hi-Hat)
-- Bandpass filtered noise burst
-- Parameters: `len`, `amp`, `out`
-
-### `\fm2op` (2-Operator FM Synth)
-- Two-operator frequency modulation synthesis
-- Modulator frequency is a ratio of the carrier frequency
-- Parameters: `freq`, `amp`, `len`, `out`, `modRatio` (0.5-7.0), `modIndex` (0.1-3.0)
-
-### `\arp` (Arpeggiator)
-- Pulse wave through resonant lowpass filter with envelope modulation
-- Classic arpeggiator sound with percussive filter sweep
-- Parameters: `freq`, `amp`, `len`, `out`, `cutoff` (2000 Hz default), `res` (0.5 default)
-
-### `\fdnReverb` (FDN Reverb Effect)
-- Feedback Delay Network reverb with Hadamard matrix diffusion
-- Routes from bus 10 to master out (bus 0)
-- Parameters: `in`, `out`, `size`, `feedback`, `wet`, `hpass`, `lpass`, `earlyMix`
 
 ## Architecture Details
 
-### Voice Management
-
-The Go adapter tracks active synth nodes per event name and implements intelligent voice stealing:
-
-- Each event has a configurable `max_voices` parameter (defaults to 1)
-- Adapter assigns unique node IDs (starting at 1001) and tracks their end times
-- When a new event would exceed `max_voices`:
-  - The oldest active node is freed via `/n_free` command
-  - Only nodes still playing at the new event's timestamp are freed
-- Active nodes are automatically cleaned up when their duration expires
-
-### Buses
+### Audio Buses
 - **Bus 0** - Master stereo out (default)
 - **Bus 10** - Reverb input (2 channels)
 
@@ -114,7 +65,7 @@ The reverb synth (node ID 1000) processes audio from bus 10 and outputs to bus 0
 
 ### Node Tree Execution Order
 
-SuperCollider executes nodes in the order they appear in the node tree. For the reverb to process audio from bus 10, voice synths **must execute before** effects.
+SuperCollider executes nodes in the order they appear in the node tree. For the reverb to process audio from bus 10, synths **must execute before** effects.
 
 The setup creates two groups with fixed IDs:
 - **Group 100** - Synths group (executes first)
@@ -123,53 +74,51 @@ The setup creates two groups with fixed IDs:
 **Node tree structure:**
 ```
 Group 0 (RootNode)
-  ├── Group 100 (synths) - voice synths added here
-  │     ├── 2000+ (voice nodes) - execute first, write to bus 0 or 10
+  ├── Group 100 (synths) - pattern-triggered synths added here
+  │     ├── 0+ (voice nodes) - execute first, write to bus 0 or 10
   └── Group 200 (effects) - execute after synths
         └── 1000 (fdnReverb) - reads from bus 10, writes to bus 0
 ```
 
 Run `s.queryAllNodes` in SuperCollider to verify the node tree structure.
 
-### Server Commands
+### Pattern Implementation
 
-Each note event sends a timestamped bundle containing:
+Patterns are implemented as **Tasks** running on **SystemClock**:
 
-1. **`/n_free nodeID`** (optional) - Frees oldest voice if max_voices exceeded
-2. **`/s_new synthDefName nodeID 0 100 "param1" val1 "param2" val2...`** - Creates new synth
-   - nodeID: unique ID assigned by adapter (2000+)
-   - addAction: 0 (add to head of group)
-   - targetID: 100 (synths group)
-   - All event parameters passed as control pairs
+```supercollider
+~myPattern.mainTask = Task({
+    inf.do {
+        // Pattern logic here
+        // Trigger synths with s.bind
+        s.bind {
+            Synth(\bd, [\amp, 0.8, \len, 0.1], target: 100);
+        };
 
-## Customization
-
-### Modify Synth Parameters
-Edit the SynthDefs in `synthdefs.scd` to add new controls or change synthesis.
-
-### Change Bus Routing
-Edit both:
-1. `supercollider/setup.scd` - Bus numbers and reverb configuration
-2. `sequencer/adapters/setup.go` - Go-side bus mappings via `SetBusID()`
-
-### Add New Sounds
-1. Add SynthDef to `synthdefs.scd`
-2. Add SynthDef and bus mappings in `sequencer/adapters/setup.go`:
-   ```go
-   scAdapter.SetSynthDefMapping("newSound", "newSynthDef")
-   scAdapter.SetBusID("newSound", 10) // route to reverb, or 0 for dry
-   ```
-3. Create pattern that emits events with name "newSound"
-
-### Configure Polyphony
-Set `max_voices` parameter in event patterns:
-```go
-Event{
-    Name: "fm",
-    Type: events.EventTypeNote,
-    Params: map[string]float32{
-        "midi_note":  60,
-        "max_voices": 4,  // allow up to 4 simultaneous voices
-    },
-}
+        // Yield to wait between events
+        0.125.yield;
+    };
+}, SystemClock);
 ```
+
+### OSC Responders
+
+Patterns define OSCdefs to respond to control messages:
+
+```supercollider
+OSCdef(\myPatternPlay, {
+    ~myPattern.mainTask.reset;
+    ~myPattern.mainTask.start;
+}, '/pattern/my_pattern/play');
+
+OSCdef(\myPatternPause, {
+    ~myPattern.mainTask.pause;
+}, '/pattern/my_pattern/pause');
+```
+
+
+## See Also
+
+- [Main README](../README.md) - Overall system architecture and setup
+- [Markov Chain Library](lib/markov.scd) - Markov chain implementation
+- [Distribution Library](lib/synthdef.scd) - Synthdefs

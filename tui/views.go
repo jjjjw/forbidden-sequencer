@@ -15,6 +15,8 @@ func (m Model) View() string {
 		return m.viewMain()
 	case ScreenSettings:
 		return m.viewSettings()
+	case ScreenPatternSelect:
+		return m.viewPatternSelect()
 	}
 	return ""
 }
@@ -27,9 +29,13 @@ func (m Model) viewMain() string {
 	left.WriteString(TitleStyle.Render("Forbidden Sequencer"))
 	left.WriteString("\n\n")
 
-	// Active controller name
+	// Active controller name with index
 	if m.ActiveController != nil {
-		left.WriteString(StatusStyle.Render("Pattern: " + m.ActiveController.GetName()))
+		controllerInfo := fmt.Sprintf("Pattern: %s (%d/%d)",
+			m.ActiveController.GetName(),
+			m.ActiveControllerIndex+1,
+			len(m.AvailableControllers))
+		left.WriteString(StatusStyle.Render(controllerInfo))
 		left.WriteString("\n\n")
 
 		// Controller status
@@ -65,7 +71,8 @@ func (m Model) viewMain() string {
 				}
 			}
 
-			// Add global quit binding
+			// Add global keybindings
+			rows = append(rows, []string{"tab", "Select pattern"})
 			rows = append(rows, []string{"q", "Quit"})
 
 			// Create table with blue border
@@ -95,9 +102,9 @@ func (m Model) viewSettings() string {
 	b.WriteString(TitleStyle.Render("Settings"))
 	b.WriteString("\n\n")
 
-	// Display current sequencer
-	if m.Settings != nil && m.Settings.SelectedSequencer != "" {
-		b.WriteString(fmt.Sprintf("Selected Sequencer: %s\n", m.Settings.SelectedSequencer))
+	// Display current controller
+	if m.ActiveController != nil {
+		b.WriteString(fmt.Sprintf("Selected Pattern: %s (index %d)\n", m.ActiveController.GetName(), m.ActiveControllerIndex))
 	}
 	b.WriteString("\n")
 
@@ -122,6 +129,46 @@ func (m Model) viewSettings() string {
 
 	// Help
 	help := "[esc] Back"
+	b.WriteString(HelpStyle.Render(help))
+
+	return b.String()
+}
+
+func (m Model) viewPatternSelect() string {
+	var b strings.Builder
+
+	// Title
+	b.WriteString(TitleStyle.Render("Select Pattern"))
+	b.WriteString("\n\n")
+
+	// Build the entire list with inline styling
+	for i, controller := range m.AvailableControllers {
+		prefix := "  "
+		if i == m.SelectedPatternIndex {
+			prefix = "> "
+		}
+
+		// Show indicator if this is the currently active pattern
+		activeIndicator := ""
+		if i == m.ActiveControllerIndex {
+			activeIndicator = " (active)"
+		}
+
+		line := fmt.Sprintf("%s%d. %s%s", prefix, i+1, controller.GetName(), activeIndicator)
+
+		// Apply color inline using lipgloss without Render
+		if i == m.SelectedPatternIndex {
+			b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")).Inline(true).Render(line))
+		} else {
+			b.WriteString(line)
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+
+	// Help
+	help := "[↑/↓] Navigate • [enter] Select • [esc] Cancel"
 	b.WriteString(HelpStyle.Render(help))
 
 	return b.String()
