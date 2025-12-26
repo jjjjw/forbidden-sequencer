@@ -82,15 +82,15 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 	case "c":
 		// Decrease kick curve
 		if c.kickCurve > 0.5 {
-			c.kickCurve -= 0.5
+			c.kickCurve -= 0.1
 			c.sendOSC("/pattern/mod_rhy/kick/curve", float32(c.kickCurve))
 		}
 		return true
 
 	case "C":
 		// Increase kick curve
-		if c.kickCurve < 5.0 {
-			c.kickCurve += 0.5
+		if c.kickCurve < 2.0 {
+			c.kickCurve += 0.1
 			c.sendOSC("/pattern/mod_rhy/kick/curve", float32(c.kickCurve))
 		}
 		return true
@@ -98,15 +98,15 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 	case "v":
 		// Decrease hihat curve
 		if c.hihatCurve > 0.5 {
-			c.hihatCurve -= 0.5
+			c.hihatCurve -= 0.1
 			c.sendOSC("/pattern/mod_rhy/hihat/curve", float32(c.hihatCurve))
 		}
 		return true
 
 	case "V":
 		// Increase hihat curve
-		if c.hihatCurve < 5.0 {
-			c.hihatCurve += 0.5
+		if c.hihatCurve < 2.0 {
+			c.hihatCurve += 0.1
 			c.sendOSC("/pattern/mod_rhy/hihat/curve", float32(c.hihatCurve))
 		}
 		return true
