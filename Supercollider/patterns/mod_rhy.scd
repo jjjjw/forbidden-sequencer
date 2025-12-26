@@ -243,6 +243,8 @@ OSCdef(\modRhyReset, {
 	// Stop tasks
 	~modRhy.kickTask.stop;
 	~modRhy.hihatTask.stop;
+	~modRhy.kickTask.reset;
+	~modRhy.hihatTask.reset;
 
 	// Reset pattern state
 	~modRhy.phraseDur = 2.0;

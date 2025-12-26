@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss/list"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 )
 
 // View returns the current screen view
@@ -50,9 +51,9 @@ func (m Model) viewMain() string {
 		// Controller-specific keybindings
 		controllerHelp := m.ActiveController.GetKeybindings()
 		if controllerHelp != "" {
-			// Parse the keybindings and render as a list
+			// Parse the keybindings and render as a table
 			lines := strings.Split(controllerHelp, "\n")
-			var items []any
+			var rows [][]string
 			for _, line := range lines {
 				if line == "" {
 					continue
@@ -60,17 +61,28 @@ func (m Model) viewMain() string {
 				// Split on ": " to separate key from description
 				parts := strings.SplitN(line, ": ", 2)
 				if len(parts) == 2 {
-					items = append(items, KeyStyle.Render(parts[0])+" "+DescStyle.Render(parts[1]))
-				} else {
-					items = append(items, line)
+					rows = append(rows, []string{parts[0], parts[1]})
 				}
 			}
 
 			// Add global quit binding
-			items = append(items, KeyStyle.Render("q")+" "+DescStyle.Render("Quit"))
+			rows = append(rows, []string{"q", "Quit"})
 
-			l := list.New(items...)
-			left.WriteString(BoxStyle.Render(l.String()))
+			// Create table with blue border
+			t := table.New().
+				Border(lipgloss.RoundedBorder()).
+				BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("62"))).
+				StyleFunc(func(row, col int) lipgloss.Style {
+					if col == 0 {
+						// Key column - bold and pink
+						return KeyStyle
+					}
+					// Description column - gray
+					return DescStyle
+				}).
+				Rows(rows...)
+
+			left.WriteString(t.String())
 		}
 	}
 

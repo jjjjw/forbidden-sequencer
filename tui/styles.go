@@ -51,8 +51,17 @@ var (
 	// Keybinding styles
 	KeyStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("212"))
+			Foreground(lipgloss.Color("212")).
+			PaddingLeft(1).
+			PaddingRight(2)
 
 	DescStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
+			Foreground(lipgloss.Color("255")).
+			PaddingLeft(1).
+			PaddingRight(1)
+
+	// Highlight style for selected synth
+	HighlightStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("212"))
 )

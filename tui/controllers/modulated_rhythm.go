@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"strings"
 
 	"forbidden_sequencer/sequencer/adapters"
 
@@ -22,6 +23,7 @@ type ModulatedRhythmController struct {
 	hihatOffset   int
 	debug         bool
 	isPlaying     bool
+	activeSynth   int // 0=phrase, 1=kick, 2=hihat
 }
 
 // NewModulatedRhythmController creates a new modulated rhythm controller
@@ -38,6 +40,7 @@ func NewModulatedRhythmController(sclangAdapter *adapters.OSCAdapter) *Modulated
 		hihatOffset:   0,
 		debug:         false,
 		isPlaying:     false,
+		activeSynth:   1, // Start with kick selected
 	}
 }
 
@@ -50,25 +53,45 @@ func (c *ModulatedRhythmController) GetName() string {
 func (c *ModulatedRhythmController) GetKeybindings() string {
 	return `p: play/stop
 space: pause/resume
+1: select kick
+2: select hihat
 d/D: phrase dur
-1/!: phrase events
-c/C: kick curve
-v/V: hihat curve
-e/E: kick events
-r/R: hihat events
-[/]: kick offset
-o/O: hihat offset
+r/R: phrase events
+c/C: curve (active synth)
+e/E: events (active synth)
+o/O: offset (active synth)
 x: debug`
 }
 
 // GetStatus returns the current state
 func (c *ModulatedRhythmController) GetStatus() string {
-	debugStr := ""
-	if c.debug {
-		debugStr = " | DEBUG"
+	var status strings.Builder
+
+	// Phrase state
+	status.WriteString(fmt.Sprintf("Phrase: %.1fs, %d events\n\n", c.phraseDur, c.phraseEvents))
+
+	// Synths section
+	status.WriteString("Synths:\n")
+
+	// Kick state (highlight if active)
+	kickPrefix := "  "
+	if c.activeSynth == 1 {
+		kickPrefix = "> "
 	}
-	return fmt.Sprintf("Phrase: %.1fs, %d events | Kick: curve=%.1f, events=%d, offset=%+d | Hihat: curve=%.1f, events=%d, offset=%+d%s",
-		c.phraseDur, c.phraseEvents, c.kickCurve, c.kickEvents, c.kickOffset, c.hihatCurve, c.hihatEvents, c.hihatOffset, debugStr)
+	status.WriteString(fmt.Sprintf("%sKick: curve=%.1f, events=%d, offset=%+d\n", kickPrefix, c.kickCurve, c.kickEvents, c.kickOffset))
+
+	// Hihat state (highlight if active)
+	hihatPrefix := "  "
+	if c.activeSynth == 2 {
+		hihatPrefix = "> "
+	}
+	status.WriteString(fmt.Sprintf("%sHihat: curve=%.1f, events=%d, offset=%+d", hihatPrefix, c.hihatCurve, c.hihatEvents, c.hihatOffset))
+
+	if c.debug {
+		status.WriteString("\nDEBUG")
+	}
+
+	return status.String()
 }
 
 // HandleInput processes controller-specific input
@@ -96,6 +119,16 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		}
 		return true
 
+	case "1":
+		// Select kick synth
+		c.activeSynth = 1
+		return true
+
+	case "2":
+		// Select hihat synth
+		c.activeSynth = 2
+		return true
+
 	case "d":
 		// Decrease phrase duration
 		if c.phraseDur > 0.5 {
@@ -112,71 +145,7 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		}
 		return true
 
-	case "c":
-		// Decrease kick curve
-		if c.kickCurve > 0.5 {
-			c.kickCurve -= 0.1
-			c.sendOSC("/pattern/mod_rhy/kick/curve", float32(c.kickCurve))
-		}
-		return true
-
-	case "C":
-		// Increase kick curve
-		if c.kickCurve < 2.0 {
-			c.kickCurve += 0.1
-			c.sendOSC("/pattern/mod_rhy/kick/curve", float32(c.kickCurve))
-		}
-		return true
-
-	case "v":
-		// Decrease hihat curve
-		if c.hihatCurve > 0.5 {
-			c.hihatCurve -= 0.1
-			c.sendOSC("/pattern/mod_rhy/hihat/curve", float32(c.hihatCurve))
-		}
-		return true
-
-	case "V":
-		// Increase hihat curve
-		if c.hihatCurve < 2.0 {
-			c.hihatCurve += 0.1
-			c.sendOSC("/pattern/mod_rhy/hihat/curve", float32(c.hihatCurve))
-		}
-		return true
-
-	case "e":
-		// Decrease kick events
-		if c.kickEvents > 1 {
-			c.kickEvents--
-			c.sendOSC("/pattern/mod_rhy/kick/events", int32(c.kickEvents))
-		}
-		return true
-
-	case "E":
-		// Increase kick events
-		if c.kickEvents < 16 {
-			c.kickEvents++
-			c.sendOSC("/pattern/mod_rhy/kick/events", int32(c.kickEvents))
-		}
-		return true
-
 	case "r":
-		// Decrease hihat events
-		if c.hihatEvents > 1 {
-			c.hihatEvents--
-			c.sendOSC("/pattern/mod_rhy/hihat/events", int32(c.hihatEvents))
-		}
-		return true
-
-	case "R":
-		// Increase hihat events
-		if c.hihatEvents < 16 {
-			c.hihatEvents++
-			c.sendOSC("/pattern/mod_rhy/hihat/events", int32(c.hihatEvents))
-		}
-		return true
-
-	case "1":
 		// Decrease phrase events
 		if c.phraseEvents > 16 {
 			c.phraseEvents--
@@ -184,7 +153,7 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		}
 		return true
 
-	case "!":
+	case "R":
 		// Increase phrase events
 		if c.phraseEvents < 32 {
 			c.phraseEvents++
@@ -192,35 +161,93 @@ func (c *ModulatedRhythmController) HandleInput(msg tea.KeyMsg) bool {
 		}
 		return true
 
-	case "[":
-		// Decrease kick offset
-		if c.kickOffset > -(c.phraseEvents - 1) {
-			c.kickOffset--
-			c.sendOSC("/pattern/mod_rhy/kick/offset", int32(c.kickOffset))
+	case "c":
+		// Decrease curve for active synth
+		if c.activeSynth == 1 {
+			if c.kickCurve > 0.5 {
+				c.kickCurve -= 0.1
+				c.sendOSC("/pattern/mod_rhy/kick/curve", float32(c.kickCurve))
+			}
+		} else if c.activeSynth == 2 {
+			if c.hihatCurve > 0.5 {
+				c.hihatCurve -= 0.1
+				c.sendOSC("/pattern/mod_rhy/hihat/curve", float32(c.hihatCurve))
+			}
 		}
 		return true
 
-	case "]":
-		// Increase kick offset
-		if c.kickOffset < (c.phraseEvents - 1) {
-			c.kickOffset++
-			c.sendOSC("/pattern/mod_rhy/kick/offset", int32(c.kickOffset))
+	case "C":
+		// Increase curve for active synth
+		if c.activeSynth == 1 {
+			if c.kickCurve < 2.0 {
+				c.kickCurve += 0.1
+				c.sendOSC("/pattern/mod_rhy/kick/curve", float32(c.kickCurve))
+			}
+		} else if c.activeSynth == 2 {
+			if c.hihatCurve < 2.0 {
+				c.hihatCurve += 0.1
+				c.sendOSC("/pattern/mod_rhy/hihat/curve", float32(c.hihatCurve))
+			}
+		}
+		return true
+
+	case "e":
+		// Decrease events for active synth
+		if c.activeSynth == 1 {
+			if c.kickEvents > 1 {
+				c.kickEvents--
+				c.sendOSC("/pattern/mod_rhy/kick/events", int32(c.kickEvents))
+			}
+		} else if c.activeSynth == 2 {
+			if c.hihatEvents > 1 {
+				c.hihatEvents--
+				c.sendOSC("/pattern/mod_rhy/hihat/events", int32(c.hihatEvents))
+			}
+		}
+		return true
+
+	case "E":
+		// Increase events for active synth
+		if c.activeSynth == 1 {
+			if c.kickEvents < 16 {
+				c.kickEvents++
+				c.sendOSC("/pattern/mod_rhy/kick/events", int32(c.kickEvents))
+			}
+		} else if c.activeSynth == 2 {
+			if c.hihatEvents < 16 {
+				c.hihatEvents++
+				c.sendOSC("/pattern/mod_rhy/hihat/events", int32(c.hihatEvents))
+			}
 		}
 		return true
 
 	case "o":
-		// Decrease hihat offset
-		if c.hihatOffset > -(c.phraseEvents - 1) {
-			c.hihatOffset--
-			c.sendOSC("/pattern/mod_rhy/hihat/offset", int32(c.hihatOffset))
+		// Decrease offset for active synth
+		if c.activeSynth == 1 {
+			if c.kickOffset > -(c.phraseEvents - 1) {
+				c.kickOffset--
+				c.sendOSC("/pattern/mod_rhy/kick/offset", int32(c.kickOffset))
+			}
+		} else if c.activeSynth == 2 {
+			if c.hihatOffset > -(c.phraseEvents - 1) {
+				c.hihatOffset--
+				c.sendOSC("/pattern/mod_rhy/hihat/offset", int32(c.hihatOffset))
+			}
 		}
 		return true
 
 	case "O":
-		// Increase hihat offset
-		if c.hihatOffset < (c.phraseEvents - 1) {
-			c.hihatOffset++
-			c.sendOSC("/pattern/mod_rhy/hihat/offset", int32(c.hihatOffset))
+		// Increase offset for active synth
+		if c.activeSynth == 1 {
+			if c.kickOffset < (c.phraseEvents - 1) {
+				c.kickOffset++
+				c.sendOSC("/pattern/mod_rhy/kick/offset", int32(c.kickOffset))
+			}
+		} else if c.activeSynth == 2 {
+			if c.hihatOffset < (c.phraseEvents - 1) {
+				c.hihatOffset++
+				c.sendOSC("/pattern/mod_rhy/hihat/offset", int32(c.hihatOffset))
+			}
 		}
 		return true
 
