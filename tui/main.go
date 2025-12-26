@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"forbidden_sequencer/adapter"
-	"forbidden_sequencer/tui"
-	"forbidden_sequencer/tui/controllers"
+	"forbidden_sequencer/controllers"
+	tui "forbidden_sequencer/internal/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

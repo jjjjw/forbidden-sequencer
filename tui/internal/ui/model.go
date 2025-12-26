@@ -2,7 +2,7 @@ package tui
 
 import (
 	"forbidden_sequencer/adapter"
-	"forbidden_sequencer/tui/controllers"
+	"forbidden_sequencer/controllers"
 )
 
 // Screen represents the current view
