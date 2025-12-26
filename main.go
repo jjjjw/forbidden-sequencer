@@ -4,14 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
-	"forbidden_sequencer/sequencer/adapters"
-	"forbidden_sequencer/sequencer/conductors"
-	"forbidden_sequencer/sequencer/events"
-	seqlib "forbidden_sequencer/sequencer/sequencers"
+	"forbidden_sequencer/adapter"
 	"forbidden_sequencer/tui"
-	"forbidden_sequencer/tui/sequencers"
+	"forbidden_sequencer/tui/controllers"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -24,12 +20,12 @@ func initialModel() tui.Model {
 	if err != nil {
 		fmt.Printf("Failed to load settings, using defaults: %v\n", err)
 		settings = &tui.Settings{
-			SelectedSequencer: "Ramp Time", // default
+			SelectedControllerIndex: 0, // default to first controller
 		}
 	}
 
-	// Initialize SuperCollider adapter
-	scAdapter, err := adapters.SetupSuperColliderAdapter(*debug)
+	// Initialize sclang OSC adapter (for pattern control)
+	sclangAdapter, err := adapter.SetupSClangAdapter()
 	if err != nil {
 		return tui.Model{
 			Settings: settings,
@@ -38,54 +34,27 @@ func initialModel() tui.Model {
 		}
 	}
 
-	// Create event channel (owned by model)
-	eventChan := make(chan events.ScheduledEvent, 100)
-
-	// Create global conductor with default tick duration (100ms)
-	conductor := conductors.NewConductor(100 * time.Millisecond)
-
-	// Create global sequencer (with empty patterns initially)
-	sequencer := seqlib.NewSequencer(nil, conductor, scAdapter, eventChan, *debug)
-
-	// Start the sequencer (this starts the runTickLoop)
-	sequencer.Start()
-
 	m := tui.Model{
-		Settings:  settings,
-		Screen:    tui.ScreenMain,
-		SCAdapter: scAdapter,
-		Debug:     *debug,
-		Conductor: conductor,
-		Sequencer: sequencer,
-		EventChan: eventChan,
+		Settings:      settings,
+		Screen:        tui.ScreenMain,
+		SClangAdapter: sclangAdapter,
+		Debug:         *debug,
 	}
 
-	// Create module factories
-	m.ModuleFactories = []sequencers.ModuleFactory{
-		&sequencers.ModulatedRhythmFactory{},
-		&sequencers.RandRhythmFactory{},
-		&sequencers.ArpFactory{},
-		&sequencers.TechnoFactory{},
-		&sequencers.MarkovChordFactory{},
+	// Create all available controllers
+	m.AvailableControllers = []controllers.Controller{
+		controllers.NewCurveTimeController(sclangAdapter),
+		controllers.NewMarkovTrigController(sclangAdapter),
+		controllers.NewMarkovChordController(sclangAdapter),
 	}
 
-	// Find and activate the saved module
-	m.ActiveModuleIndex = 0
-	for i, factory := range m.ModuleFactories {
-		if factory.GetName() == settings.SelectedSequencer {
-			m.ActiveModuleIndex = i
-			break
-		}
+	// Set initial controller from settings (with bounds checking)
+	m.ActiveControllerIndex = settings.SelectedControllerIndex
+	if m.ActiveControllerIndex < 0 || m.ActiveControllerIndex >= len(m.AvailableControllers) {
+		m.ActiveControllerIndex = 0 // fall back to first controller
+		settings.SelectedControllerIndex = 0
 	}
-
-	// Create and initialize active module (starts paused)
-	if m.ActiveModuleIndex < len(m.ModuleFactories) {
-		factory := m.ModuleFactories[m.ActiveModuleIndex]
-		m.ActiveModule = factory.Create(conductor)
-
-		// Load the module's patterns into the global sequencer
-		sequencer.SetPatterns(m.ActiveModule.GetPatterns())
-	}
+	m.ActiveController = m.AvailableControllers[m.ActiveControllerIndex]
 
 	return m
 }
@@ -95,13 +64,6 @@ func main() {
 
 	m := initialModel()
 	p := tea.NewProgram(m, tea.WithAltScreen())
-
-	// Single goroutine to forward events from the channel to TUI
-	go func() {
-		for event := range m.EventChan {
-			p.Send(tui.EventMsg(event))
-		}
-	}()
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
