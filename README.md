@@ -19,19 +19,13 @@ Audio Interface
 ### Components
 
 - **Web Frontend** (`web/frontend/`) - Vite + Svelte single-page application
-  - Three pattern controllers with sliders and visual feedback
-  - Real-time OSC communication via HTTP
-  - TailwindCSS styling
 
-- **OSC Bridge** (`web/bridge/`) - Tiny Go HTTP server (~60 lines)
+- **OSC Bridge** (`web/bridge/`) - Tiny Go HTTP server
   - Converts HTTP POST requests → OSC/UDP messages
   - Receives JSON from browser, forwards as OSC to SuperCollider
   - Runs on port 8080
 
 - **SuperCollider Patterns** (`supercollider/patterns/`)
-  - **Curve Time** - Rhythmic patterns with curved timing
-  - **Markov Triggers** - Probabilistic Markov chain triggers
-  - **Markov Chord** - Alternating chord/percussion sections
 
 ## Setup
 
@@ -68,14 +62,6 @@ npm run dev
 ```
 
 Open browser to http://localhost:5173
-
-## Usage
-
-1. Select a pattern using the tabs at the top
-2. Use sliders to adjust parameters in real-time
-3. Click "Play" to start the pattern
-4. Adjust parameters while the pattern is playing
-5. Click "Debug" to enable debug logging in SuperCollider
 
 See [`web/README.md`](web/README.md) for detailed web GUI documentation.
 
